@@ -178,7 +178,7 @@
           onsubmit="return confirmRestore()">
         <div class="fbr-file-row">
             <label for="archive-file" class="fbr-file-label"><%:Выбрать файл%></label>
-            <input id="archive-file" type="file" name="archive" accept=".tar.gz,.tgz" required
+            <input id="archive-file" type="file" name="archive" accept=".tar.gz,.tgz"
                    style="display:none;" onchange="updateArchiveFileName(this)" />
             <span id="archive-file-name" class="fbr-file-name"></span>
         </div>
@@ -207,6 +207,15 @@ function showRestoreLoadingMessage() {
     return true;
 }
 function confirmRestore() {
+    // Поле выбора файла скрыто через display:none, поэтому атрибут required
+    // на нём не используется: браузер не может показать подсказку валидации
+    // у невидимого элемента и молча отменяет отправку. Проверяем сами.
+    var input = document.getElementById("archive-file");
+    if (!input.files || input.files.length === 0) {
+        alert("Сначала выберите файл резервной копии.");
+        return false;
+    }
+
     var msg = "Файлы overlay будут перезаписаны содержимым архива, " +
               "после чего устройство автоматически перезагрузится. Продолжить?";
     if (!confirm(msg)) {
