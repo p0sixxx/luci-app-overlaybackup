@@ -27,23 +27,26 @@
 
 ### Вариант 1: копирование файлов (без пересборки прошивки)
 
-С компьютера, где лежит распакованный проект:
+Скопируйте каталог проекта на роутер и запустите установщик там:
 
 ```sh
-scp luasrc/controller/overlaybackup.lua root@<IP роутера>:/usr/lib/lua/luci/controller/overlaybackup.lua
-scp luasrc/view/overlaybackup.htm       root@<IP роутера>:/usr/lib/lua/luci/view/overlaybackup.htm
+scp -r luci-app-overlaybackup root@<IP роутера>:/tmp/
+ssh root@<IP роутера> 'sh /tmp/luci-app-overlaybackup/deploy/install.sh'
 ```
 
-Затем на роутере сбросить кэш LuCI и перезапустить веб-сервер:
+`deploy/install.sh` разложит файлы по путям из `deploy/MANIFEST`, удалит
+файлы прежних версий плагина, сбросит кэш LuCI и перезапустит `uhttpd`.
+Удаление — `sh deploy/uninstall.sh`. Если файлы переносятся вручную,
+перечитать их заставит `sh deploy/restart.sh`.
+
+Всё содержимое `runtime/` повторяет раскладку файловой системы роутера,
+поэтому при желании можно скопировать файлы и поштучно:
 
 ```sh
-rm -f /tmp/luci-indexcache*
-rm -rf /tmp/luci-modulecache
-/etc/init.d/uhttpd restart
+scp runtime/usr/lib/lua/luci/controller/overlaybackup.lua root@<IP роутера>:/usr/lib/lua/luci/controller/overlaybackup.lua
+scp runtime/usr/lib/lua/luci/view/overlaybackup.htm       root@<IP роутера>:/usr/lib/lua/luci/view/overlaybackup.htm
+scp runtime/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo    root@<IP роутера>:/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo
 ```
-
-Если весь каталог проекта скопирован на роутер целиком, то же самое делает
-скрипт `sh install.sh`, запущенный на роутере. Удаление — `sh uninstall.sh`.
 
 ### Вариант 2: сборка ipk в OpenWrt SDK
 
@@ -55,27 +58,19 @@ make package/luci-app-overlaybackup/compile V=s
 
 ### Язык интерфейса
 
-Переводы устроены так же, как в остальных пакетах LuCI: исходные строки в коде
-английские, переводы лежат в `po/<язык>/overlaybackup.po` и при сборке пакета
-компилируются в каталоги `.lmo`. Каждому языку соответствует отдельный
-подпакет, который `luci.mk` создаёт автоматически:
+Переводы идут через обычный для LuCI механизм gettext: исходные строки в коде
+английские, перевод лежит в `po/ru/overlaybackup.po`, а страница получает его
+из скомпилированного каталога `/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo`.
 
-```sh
-opkg install luci-i18n-overlaybackup-ru
-```
+Язык следует общей настройке в **System → System → Language**, то есть
+переключается вместе со всем остальным интерфейсом LuCI.
 
-После установки страница следует языку, выбранному в **Система → Язык и
-оформление**, и переключается вместе со всем остальным интерфейсом LuCI.
-
-Каталог переводов ставится в `/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo`.
-Если его нет — например, при установке копированием файлов, — страница
-показывает исходные английские строки. Это штатное поведение LuCI, а не
-ошибка: чтобы получить русский интерфейс при ручной установке, положите
-собранный `.lmo` в `po/ru/` рядом с `.po`, и `install.sh` перенесёт его сам.
-
-Чтобы добавить ещё один язык, скопируйте `po/templates/overlaybackup.pot`
-в `po/<код языка>/overlaybackup.po` и переведите строки — подпакет для него
-появится сам.
+Собранный каталог **закоммичен** в `runtime/usr/lib/lua/luci/i18n/` и
+устанавливается наравне с остальными файлами: проект разворачивается
+копированием на роутер, где нет ни компилятора, ни сборочных утилит LuCI.
+Подробности — правка строк, пересборка `.lmo`, добавление языков и разбор
+того, почему msgid не должны совпадать со строками `luci-base`, — в
+[`po/README.md`](po/README.md).
 
 ### Зависимости
 
@@ -130,13 +125,15 @@ RAM обрывало ответ, и браузер показывал **Bad Requ
 ## Структура репозитория
 
 ```
-luasrc/controller/overlaybackup.lua   контроллер (маршруты и логика)
-luasrc/view/overlaybackup.htm         шаблон страницы
-po/templates/overlaybackup.pot        шаблон для новых переводов
-po/ru/overlaybackup.po                русский перевод
-Makefile                              сборка пакета для OpenWrt
-install.sh / uninstall.sh             установка вручную, запускать на роутере
-make-zip.sh                           сборка zip с исходниками плагина
+runtime/                              раскладка файлов от корня ФС роутера
+  usr/lib/lua/luci/controller/…lua    контроллер (маршруты и логика)
+  usr/lib/lua/luci/view/…htm          шаблон страницы
+  usr/lib/lua/luci/i18n/…ru.lmo       собранный русский каталог
+deploy/MANIFEST                       список файлов и путей установки
+deploy/install.sh, uninstall.sh       установка и удаление, запускать на роутере
+deploy/restart.sh                     перечитать файлы после ручного копирования
+po/                                   исходники переводов и инструменты к ним
+Makefile                              необязательная сборка ipk для OpenWrt
 ```
 
 ## Предупреждение
@@ -183,23 +180,26 @@ Tested on Netis NX30 v2 / GL.iNet Flint 2 running vanilla OpenWrt 25.12.5.
 
 ### Option 1: copying the files (no firmware rebuild)
 
-From the machine holding the unpacked project:
+Copy the project directory to the router and run the installer there:
 
 ```sh
-scp luasrc/controller/overlaybackup.lua root@<router IP>:/usr/lib/lua/luci/controller/overlaybackup.lua
-scp luasrc/view/overlaybackup.htm       root@<router IP>:/usr/lib/lua/luci/view/overlaybackup.htm
+scp -r luci-app-overlaybackup root@<router IP>:/tmp/
+ssh root@<router IP> 'sh /tmp/luci-app-overlaybackup/deploy/install.sh'
 ```
 
-Then drop the LuCI cache and restart the web server on the router:
+`deploy/install.sh` lays the files out along the paths in `deploy/MANIFEST`,
+removes the files of earlier versions of the plugin, drops the LuCI cache and
+restarts `uhttpd`. To remove it, use `sh deploy/uninstall.sh`; after copying
+files by hand, `sh deploy/restart.sh` makes LuCI pick them up.
+
+Everything under `runtime/` mirrors the router's filesystem layout, so the
+files can just as well be copied one by one:
 
 ```sh
-rm -f /tmp/luci-indexcache*
-rm -rf /tmp/luci-modulecache
-/etc/init.d/uhttpd restart
+scp runtime/usr/lib/lua/luci/controller/overlaybackup.lua root@<router IP>:/usr/lib/lua/luci/controller/overlaybackup.lua
+scp runtime/usr/lib/lua/luci/view/overlaybackup.htm       root@<router IP>:/usr/lib/lua/luci/view/overlaybackup.htm
+scp runtime/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo    root@<router IP>:/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo
 ```
-
-If the whole project directory was copied to the router, `sh install.sh` run
-on the router does the same thing. To remove it, use `sh uninstall.sh`.
 
 ### Option 2: building an ipk with the OpenWrt SDK
 
@@ -211,28 +211,19 @@ make package/luci-app-overlaybackup/compile V=s
 
 ### Interface language
 
-Translations work the way they do in every other LuCI package: the source
-strings in the code are English, the translations live in
-`po/<language>/overlaybackup.po` and are compiled into `.lmo` catalogs when the
-package is built. Each language gets its own subpackage, which `luci.mk`
-generates automatically:
+Translations go through LuCI's ordinary gettext machinery: the source strings
+in the code are English, the Russian translation lives in
+`po/ru/overlaybackup.po`, and the page picks it up from the compiled catalog at
+`/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo`.
 
-```sh
-opkg install luci-i18n-overlaybackup-ru
-```
+The language follows the global setting under **System → System → Language**,
+so it switches along with the rest of the LuCI interface.
 
-Once installed, the page follows the language chosen under **System → Language
-and Style** and switches along with the rest of the LuCI interface.
-
-The catalog is installed as `/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo`. When
-it is missing — after installing by copying the files, for instance — the page
-shows the English source strings. That is how LuCI is meant to behave, not a
-failure: to get a translated interface from a manual install, drop the compiled
-`.lmo` into `po/ru/` next to the `.po` and `install.sh` will carry it over.
-
-To add another language, copy `po/templates/overlaybackup.pot` to
-`po/<language code>/overlaybackup.po` and translate the strings — the
-subpackage for it appears on its own.
+The compiled catalog is **committed** under `runtime/usr/lib/lua/luci/i18n/`
+and installed like any other file: this project is deployed by copying onto a
+router, which has neither a compiler nor the LuCI build host tools. Editing
+strings, rebuilding the `.lmo`, adding languages and why msgids must not
+collide with `luci-base` are all covered in [`po/README.md`](po/README.md).
 
 ### Dependencies
 
@@ -286,13 +277,15 @@ delay, so that the HTTP response reaches the browser before the connection drops
 ## Repository layout
 
 ```
-luasrc/controller/overlaybackup.lua   controller (routes and logic)
-luasrc/view/overlaybackup.htm         page template
-po/templates/overlaybackup.pot        template for new translations
-po/ru/overlaybackup.po                Russian translation
-Makefile                              OpenWrt package build
-install.sh / uninstall.sh             manual install, run on the router
-make-zip.sh                           builds a zip with the plugin sources
+runtime/                              files laid out from the router's FS root
+  usr/lib/lua/luci/controller/…lua    controller (routes and logic)
+  usr/lib/lua/luci/view/…htm          page template
+  usr/lib/lua/luci/i18n/…ru.lmo       compiled Russian catalog
+deploy/MANIFEST                       file list and install paths
+deploy/install.sh, uninstall.sh       install and removal, run on the router
+deploy/restart.sh                     reload after copying files by hand
+po/                                   translation sources and their tooling
+Makefile                              optional ipk build for OpenWrt
 ```
 
 ## Warning

@@ -39,10 +39,10 @@ msgstr ""
 msgid "The archive is ready in /tmp. Download it for off-device storage, or delete it."
 msgstr ""
 
-msgid "Download backup"
+msgid "Download the archive"
 msgstr ""
 
-msgid "Delete backup"
+msgid "Delete the archive"
 msgstr ""
 
 msgid "Restoring from an archive"
@@ -63,7 +63,7 @@ msgstr ""
 msgid "Choose file"
 msgstr ""
 
-msgid "Restore backup"
+msgid "Restore and reboot"
 msgstr ""
 
 msgid "Restoring, please wait..."

@@ -2,14 +2,17 @@ module("luci.controller.overlaybackup", package.seeall)
 
 local i18n = require "luci.i18n"
 
--- Каталог переводов пакета: /usr/lib/lua/luci/i18n/overlaybackup.<язык>.lmo
--- Его ставит подпакет luci-i18n-overlaybackup-<язык>. Если каталога нет,
--- LuCI показывает исходные английские строки.
+-- Каталог переводов: /usr/lib/lua/luci/i18n/overlaybackup.<язык>.lmo
+-- Если каталога нет, LuCI показывает исходные английские строки.
 local I18N_CATALOG = "overlaybackup"
 
 function index()
-    i18n.loadc(I18N_CATALOG)
-
+    -- Каталог здесь намеренно НЕ загружается. Дерево диспетчера кэшируется
+    -- в /tmp/luci-indexcache независимо от языка, поэтому в него должен
+    -- попасть исходный английский заголовок: тему LuCI переводит пункт меню
+    -- при отрисовке, и тогда он следует текущему языку. Переведи мы заголовок
+    -- здесь - в кэше осел бы русский текст, и после переключения языка меню
+    -- осталось бы русским до сброса кэша.
     entry({"admin", "system", "overlaybackup"}, firstchild(), _("Overlay backup and restore"), 60).dependent = false
     entry({"admin", "system", "overlaybackup", "backup"}, call("action_backup_page"), _("Overlay backup and restore"), 10)
     entry({"admin", "system", "overlaybackup", "create_backup"}, call("create_backup"), nil)

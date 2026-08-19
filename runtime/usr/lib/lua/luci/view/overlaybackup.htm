@@ -146,10 +146,10 @@
             </p>
             <div class="obk-actions">
                 <form method="get" action="<%=url('admin/system/overlaybackup/download')%>" style="margin:0;">
-                    <input type="submit" class="cbi-button cbi-button-add" value="<%:Download backup%>" />
+                    <input type="submit" class="cbi-button cbi-button-add" value="<%:Download the archive%>" />
                 </form>
                 <form method="post" action="<%=url('admin/system/overlaybackup/delete_backup')%>" style="margin:0;">
-                    <input type="submit" class="cbi-button cbi-button-reset" value="<%:Delete backup%>" />
+                    <input type="submit" class="cbi-button cbi-button-reset" value="<%:Delete the archive%>" />
                 </form>
             </div>
         </div>
@@ -187,7 +187,7 @@
             <span id="archive-file-name" class="obk-file-name"></span>
         </div>
         <div class="obk-actions">
-            <input type="submit" class="cbi-button cbi-button-negative" value="<%:Restore backup%>" />
+            <input type="submit" class="cbi-button cbi-button-negative" value="<%:Restore and reboot%>" />
             <div id="restore-loading-message" class="obk-loading" style="display:none;">
                 <span class="obk-spinner"></span>
                 <span><%:Restoring, please wait...%></span>

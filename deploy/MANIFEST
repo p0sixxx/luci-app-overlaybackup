@@ -1,0 +1,10 @@
+# luci-app-overlaybackup - deployment manifest
+#
+# One "<source relative to runtime/>  <destination absolute path>" pair per
+# line. install.sh / uninstall.sh parse this file so the file list only has
+# to be maintained in one place. Lines starting with # are comments, blank
+# lines are ignored.
+
+usr/lib/lua/luci/controller/overlaybackup.lua   /usr/lib/lua/luci/controller/overlaybackup.lua
+usr/lib/lua/luci/view/overlaybackup.htm         /usr/lib/lua/luci/view/overlaybackup.htm
+usr/lib/lua/luci/i18n/overlaybackup.ru.lmo      /usr/lib/lua/luci/i18n/overlaybackup.ru.lmo

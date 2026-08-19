@@ -40,11 +40,11 @@ msgstr "Существующий бэкап"
 msgid "The archive is ready in /tmp. Download it for off-device storage, or delete it."
 msgstr "Архив подготовлен в /tmp. Скачайте его для хранения вне устройства или удалите."
 
-msgid "Download backup"
-msgstr "Скачать бэкап"
+msgid "Download the archive"
+msgstr "Скачать архив"
 
-msgid "Delete backup"
-msgstr "Удалить бэкап"
+msgid "Delete the archive"
+msgstr "Удалить архив"
 
 msgid "Restoring from an archive"
 msgstr "Восстановление из архива"
@@ -64,8 +64,8 @@ msgstr "Ошибка восстановления"
 msgid "Choose file"
 msgstr "Выбрать файл"
 
-msgid "Restore backup"
-msgstr "Восстановить бэкап"
+msgid "Restore and reboot"
+msgstr "Восстановить и перезагрузить"
 
 msgid "Restoring, please wait..."
 msgstr "Восстановление, подождите..."
