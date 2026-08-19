@@ -41,21 +41,6 @@ rm -rf /tmp/luci-modulecache
 Если весь каталог проекта скопирован на роутер целиком, то же самое делает
 скрипт `sh install.sh`, запущенный на роутере. Удаление — `sh uninstall.sh`.
 
-### Обновление с прежних версий
-
-Ранние версии плагина назывались `fullbackup` и `fullbackuprestore`. Их файлы
-надо удалить, иначе в меню останутся лишние пункты, ведущие на устаревшие
-страницы:
-
-```sh
-rm -f /usr/lib/lua/luci/controller/fullbackup.lua \
-      /usr/lib/lua/luci/controller/fullbackuprestore.lua \
-      /usr/lib/lua/luci/view/fullbackup.htm \
-      /usr/lib/lua/luci/view/fullbackuprestore.htm
-```
-
-Скрипт `install.sh` делает это сам.
-
 ### Вариант 2: сборка ipk в OpenWrt SDK
 
 ```sh
