@@ -15,7 +15,8 @@
 * **Создание бэкапа** — всё содержимое overlay (установленные пакеты,
   конфигурация, изменённые и добавленные файлы) упаковывается в
   `/tmp/overlay.tar.gz`.
-* **Скачивание** готового архива для хранения вне устройства.
+* **Скачивание** готового архива для хранения вне устройства. Браузер
+  сохранит его под именем `overlay-backup-<имя устройства>-<ГГГГ-ММ-ДД>.tar.gz`.
 * **Удаление** архива из `/tmp`, чтобы не занимать оперативную память.
 * **Восстановление** из ранее сохранённого `overlay.tar.gz` с автоматической
   перезагрузкой устройства после распаковки.
@@ -75,6 +76,12 @@ opkg update && opkg install luci-compat luci-lua-runtime luci-lib-nixio
 ошибкой `Operation not permitted`.
 
 ### Скачивание
+
+Имя файла для браузера собирается из имени устройства (`/proc/sys/kernel/hostname`,
+недопустимые для имени файла символы заменяются на `_`) и даты. Дата берётся из
+времени изменения самого архива, а не из момента скачивания, поэтому повторная
+загрузка того же архива даёт то же имя. В `/tmp` архив по-прежнему называется
+`overlay.tar.gz`.
 
 Файл отдаётся блоками по 64 КБ и с заголовком `Content-Length`. Чтение
 архива целиком в память (`f:read("*a")`) на устройствах с небольшим объёмом
@@ -137,7 +144,8 @@ Tested on Netis NX30 v2 / GL.iNet Flint 2 running vanilla OpenWrt 25.12.5.
 * **Create a backup** — the entire overlay content (installed packages,
   configuration, modified and added files) is packed into
   `/tmp/overlay.tar.gz`.
-* **Download** the resulting archive to keep it off the device.
+* **Download** the resulting archive to keep it off the device. The browser
+  saves it as `overlay-backup-<hostname>-<YYYY-MM-DD>.tar.gz`.
 * **Delete** the archive from `/tmp` so it stops using up RAM.
 * **Restore** from a previously saved `overlay.tar.gz`, with the device
   rebooting automatically once the archive is unpacked.
@@ -196,6 +204,12 @@ Otherwise tar stores them as hardlink entries, and recreating a hard link while
 unpacking back onto overlayfs can fail with `Operation not permitted`.
 
 ### Downloading
+
+The file name offered to the browser is built from the device hostname
+(`/proc/sys/kernel/hostname`, with characters unsafe for a file name replaced by
+`_`) and the date. The date comes from the archive's own modification time rather
+than from the moment of download, so downloading the same archive again yields the
+same name. Inside `/tmp` the archive is still called `overlay.tar.gz`.
 
 The file is served in 64 KiB blocks and with a `Content-Length` header. Reading
 the whole archive into memory (`f:read("*a")`) truncated the response on devices

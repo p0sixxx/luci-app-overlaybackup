@@ -93,13 +93,37 @@ function create_backup()
     luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
 end
 
+-- Имя, под которым архив отдаётся браузеру:
+-- overlay-backup-<имя устройства>-<ГГГГ-ММ-ДД>.tar.gz
+-- Дата берётся из времени изменения самого архива, а не из момента
+-- скачивания, чтобы повторная загрузка того же файла давала то же имя.
+local function backup_filename(mtime)
+    local fs = require "nixio.fs"
+
+    local hostname = fs.readfile("/proc/sys/kernel/hostname") or ""
+    hostname = hostname:gsub("%s", "")
+    -- В имени файла оставляем только безопасные символы: имя хоста
+    -- задаёт пользователь, и кавычка или слэш сломали бы заголовок
+    -- Content-Disposition.
+    hostname = hostname:gsub("[^%w%-_.]", "_")
+    if hostname == "" then
+        hostname = "openwrt"
+    end
+
+    return string.format(
+        "overlay-backup-%s-%s.tar.gz",
+        hostname, os.date("%Y-%m-%d", mtime or os.time())
+    )
+end
+
 function download_backup()
     local backup_file = "/tmp/overlay.tar.gz"
     local fs = require "nixio.fs"
     if fs.access(backup_file) then
         local stat = fs.stat(backup_file)
+        local name = backup_filename(stat and stat.mtime)
 
-        luci.http.header('Content-Disposition', 'attachment; filename="overlay.tar.gz"')
+        luci.http.header('Content-Disposition', 'attachment; filename="' .. name .. '"')
         if stat and stat.size then
             luci.http.header('Content-Length', tostring(stat.size))
         end
