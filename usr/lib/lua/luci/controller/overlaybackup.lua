@@ -1,12 +1,12 @@
-module("luci.controller.fullbackuprestore", package.seeall)
+module("luci.controller.overlaybackup", package.seeall)
 
 function index()
-    entry({"admin", "system", "fullbackuprestore"}, firstchild(), _("Бэкап и восстановление overlay"), 60).dependent = false
-    entry({"admin", "system", "fullbackuprestore", "backup"}, call("action_backup_page"), _("Бэкап и восстановление overlay"), 10)
-    entry({"admin", "system", "fullbackuprestore", "create_backup"}, call("create_backup"), nil)
-    entry({"admin", "system", "fullbackuprestore", "delete_backup"}, call("delete_backup"), nil)
-    entry({"admin", "system", "fullbackuprestore", "download"}, call("download_backup"), nil)
-    entry({"admin", "system", "fullbackuprestore", "restore"}, call("restore_backup"), nil)
+    entry({"admin", "system", "overlaybackup"}, firstchild(), _("Бэкап и восстановление overlay"), 60).dependent = false
+    entry({"admin", "system", "overlaybackup", "backup"}, call("action_backup_page"), _("Бэкап и восстановление overlay"), 10)
+    entry({"admin", "system", "overlaybackup", "create_backup"}, call("create_backup"), nil)
+    entry({"admin", "system", "overlaybackup", "delete_backup"}, call("delete_backup"), nil)
+    entry({"admin", "system", "overlaybackup", "download"}, call("download_backup"), nil)
+    entry({"admin", "system", "overlaybackup", "restore"}, call("restore_backup"), nil)
 end
 
 function action_backup_page()
@@ -39,7 +39,7 @@ function action_backup_page()
         os.remove(restore_err_file)
     end
 
-    tpl.render("fullbackuprestore", {
+    tpl.render("overlaybackup", {
         error_log = error_log,
         restore_ok = restore_ok,
         restore_log = restore_log
@@ -90,7 +90,7 @@ function create_backup()
         os.remove(exclude_file)
     end
 
-    luci.http.redirect(luci.dispatcher.build_url("admin/system/fullbackuprestore/backup"))
+    luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
 end
 
 function download_backup()
@@ -158,7 +158,7 @@ function restore_backup()
 
     if not fs.access(upload_path) then
         fs.writefile(err_file, "Файл архива не был получен. Убедитесь, что вы выбрали файл перед нажатием кнопки.\n")
-        luci.http.redirect(luci.dispatcher.build_url("admin/system/fullbackuprestore/backup"))
+        luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
         return
     end
 
@@ -198,7 +198,7 @@ function restore_backup()
         fs.writefile(err_file, tar_output)
     end
 
-    luci.http.redirect(luci.dispatcher.build_url("admin/system/fullbackuprestore/backup"))
+    luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
 end
 
 function delete_backup()
@@ -214,5 +214,5 @@ function delete_backup()
     if nixio.fs.access(exclude_file) then
         os.remove(exclude_file)
     end
-    luci.http.redirect(luci.dispatcher.build_url("admin/system/fullbackuprestore/backup"))
+    luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
 end

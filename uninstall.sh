@@ -1,11 +1,18 @@
 #!/bin/sh
 #
-# Удаление плагина с роутера. Запускать НА РОУТЕРЕ.
+# Удаление luci-app-overlaybackup с роутера. Запускать НА РОУТЕРЕ:
+#
+#   sh uninstall.sh
 #
 set -e
 
-rm -f /usr/lib/lua/luci/controller/fullbackuprestore.lua
-rm -f /usr/lib/lua/luci/view/fullbackuprestore.htm
+# Текущие файлы плагина и файлы прежних версий (fullbackup, fullbackuprestore).
+rm -f /usr/lib/lua/luci/controller/overlaybackup.lua \
+      /usr/lib/lua/luci/controller/fullbackup.lua \
+      /usr/lib/lua/luci/controller/fullbackuprestore.lua \
+      /usr/lib/lua/luci/view/overlaybackup.htm \
+      /usr/lib/lua/luci/view/fullbackup.htm \
+      /usr/lib/lua/luci/view/fullbackuprestore.htm 2>/dev/null || true
 
 # Временные файлы, которые плагин создаёт в /tmp.
 rm -f /tmp/overlay.tar.gz \

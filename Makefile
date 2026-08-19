@@ -41,11 +41,11 @@ endef
 
 define Package/luci-app-overlaybackup/install
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/controller
-	$(INSTALL_DATA) ./usr/lib/lua/luci/controller/fullbackuprestore.lua \
-		$(1)/usr/lib/lua/luci/controller/fullbackuprestore.lua
+	$(INSTALL_DATA) ./usr/lib/lua/luci/controller/overlaybackup.lua \
+		$(1)/usr/lib/lua/luci/controller/overlaybackup.lua
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/view
-	$(INSTALL_DATA) ./usr/lib/lua/luci/view/fullbackuprestore.htm \
-		$(1)/usr/lib/lua/luci/view/fullbackuprestore.htm
+	$(INSTALL_DATA) ./usr/lib/lua/luci/view/overlaybackup.htm \
+		$(1)/usr/lib/lua/luci/view/overlaybackup.htm
 endef
 
 define Package/luci-app-overlaybackup/postinst

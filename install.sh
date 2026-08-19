@@ -1,16 +1,16 @@
 #!/bin/sh
 #
-# Установка плагина на роутер.
+# Установка luci-app-overlaybackup на роутер.
 # Запускать НА РОУТЕРЕ из распакованного каталога проекта:
 #
-#   ./install.sh
+#   sh install.sh
 #
 set -e
 
 SRC_DIR="$(dirname "$0")"
 
-CTRL_SRC="$SRC_DIR/usr/lib/lua/luci/controller/fullbackuprestore.lua"
-VIEW_SRC="$SRC_DIR/usr/lib/lua/luci/view/fullbackuprestore.htm"
+CTRL_SRC="$SRC_DIR/usr/lib/lua/luci/controller/overlaybackup.lua"
+VIEW_SRC="$SRC_DIR/usr/lib/lua/luci/view/overlaybackup.htm"
 
 for f in "$CTRL_SRC" "$VIEW_SRC"; do
 	if [ ! -f "$f" ]; then
@@ -26,10 +26,17 @@ if [ ! -d /usr/lib/lua/luci ]; then
 	exit 1
 fi
 
+# Файлы прежних версий плагина (fullbackup, fullbackuprestore). Если их не
+# удалить, в меню останутся лишние пункты, ведущие на устаревшие страницы.
+rm -f /usr/lib/lua/luci/controller/fullbackup.lua \
+      /usr/lib/lua/luci/controller/fullbackuprestore.lua \
+      /usr/lib/lua/luci/view/fullbackup.htm \
+      /usr/lib/lua/luci/view/fullbackuprestore.htm 2>/dev/null || true
+
 mkdir -p /usr/lib/lua/luci/controller /usr/lib/lua/luci/view
 
-cp "$CTRL_SRC" /usr/lib/lua/luci/controller/fullbackuprestore.lua
-cp "$VIEW_SRC" /usr/lib/lua/luci/view/fullbackuprestore.htm
+cp "$CTRL_SRC" /usr/lib/lua/luci/controller/overlaybackup.lua
+cp "$VIEW_SRC" /usr/lib/lua/luci/view/overlaybackup.htm
 
 # Сброс кэшей LuCI, иначе новая страница не появится в меню.
 rm -f /tmp/luci-indexcache* 2>/dev/null || true

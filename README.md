@@ -4,7 +4,7 @@
 `/overlay` прямо из веб-интерфейса роутера.
 
 Страница появляется в меню **Система → Бэкап и восстановление overlay**
-(`admin/system/fullbackuprestore`).
+(`admin/system/overlaybackup`).
 
 Проверялось на Netis NX30 с ванильной OpenWrt.
 
@@ -26,8 +26,8 @@
 С компьютера, где лежит распакованный проект:
 
 ```sh
-scp usr/lib/lua/luci/controller/fullbackuprestore.lua root@<IP роутера>:/usr/lib/lua/luci/controller/fullbackuprestore.lua
-scp usr/lib/lua/luci/view/fullbackuprestore.htm       root@<IP роутера>:/usr/lib/lua/luci/view/fullbackuprestore.htm
+scp usr/lib/lua/luci/controller/overlaybackup.lua root@<IP роутера>:/usr/lib/lua/luci/controller/overlaybackup.lua
+scp usr/lib/lua/luci/view/overlaybackup.htm       root@<IP роутера>:/usr/lib/lua/luci/view/overlaybackup.htm
 ```
 
 Затем на роутере сбросить кэш LuCI и перезапустить веб-сервер:
@@ -40,6 +40,21 @@ rm -rf /tmp/luci-modulecache
 
 Если весь каталог проекта скопирован на роутер целиком, то же самое делает
 скрипт `sh install.sh`, запущенный на роутере. Удаление — `sh uninstall.sh`.
+
+### Обновление с прежних версий
+
+Ранние версии плагина назывались `fullbackup` и `fullbackuprestore`. Их файлы
+надо удалить, иначе в меню останутся лишние пункты, ведущие на устаревшие
+страницы:
+
+```sh
+rm -f /usr/lib/lua/luci/controller/fullbackup.lua \
+      /usr/lib/lua/luci/controller/fullbackuprestore.lua \
+      /usr/lib/lua/luci/view/fullbackup.htm \
+      /usr/lib/lua/luci/view/fullbackuprestore.htm
+```
+
+Скрипт `install.sh` делает это сам.
 
 ### Вариант 2: сборка ipk в OpenWrt SDK
 
@@ -96,11 +111,11 @@ RAM обрывало ответ, и браузер показывал **Bad Requ
 ## Структура репозитория
 
 ```
-usr/lib/lua/luci/controller/fullbackuprestore.lua   контроллер (маршруты и логика)
-usr/lib/lua/luci/view/fullbackuprestore.htm         шаблон страницы
-Makefile                                            сборка пакета для OpenWrt
-install.sh / uninstall.sh                           установка вручную, запускать на роутере
-make-zip.sh                                         сборка zip с раскладкой от корня ФС
+usr/lib/lua/luci/controller/overlaybackup.lua   контроллер (маршруты и логика)
+usr/lib/lua/luci/view/overlaybackup.htm         шаблон страницы
+Makefile                                        сборка пакета для OpenWrt
+install.sh / uninstall.sh                       установка вручную, запускать на роутере
+make-zip.sh                                     сборка zip с раскладкой от корня ФС
 ```
 
 ## Предупреждение

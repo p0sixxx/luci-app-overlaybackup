@@ -1,44 +1,44 @@
 <%+header%>
 
 <style>
-.fbr-wrap { max-width: 760px; }
-.fbr-desc { opacity: 0.75; margin-bottom: 24px; line-height: 1.5; }
-.fbr-card {
+.obk-wrap { max-width: 760px; }
+.obk-desc { opacity: 0.75; margin-bottom: 24px; line-height: 1.5; }
+.obk-card {
     border: 1px solid rgba(127,127,127,0.3);
     border-radius: 10px;
     padding: 18px 22px 22px;
     margin-bottom: 22px;
     background: rgba(127,127,127,0.05);
 }
-.fbr-card h3 {
+.obk-card h3 {
     margin-top: 0;
     margin-bottom: 6px;
     font-size: 1.15em;
 }
-.fbr-card-desc {
+.obk-card-desc {
     opacity: 0.75;
     margin-bottom: 16px;
     line-height: 1.4;
 }
-.fbr-alert {
+.obk-alert {
     border-radius: 8px;
     padding: 12px 16px;
     margin-bottom: 16px;
     line-height: 1.4;
 }
-.fbr-alert-success {
+.obk-alert-success {
     background: rgba(46,125,50,0.12);
     border: 1px solid rgba(46,125,50,0.45);
 }
-.fbr-alert-error {
+.obk-alert-error {
     background: rgba(192,57,43,0.12);
     border: 1px solid rgba(192,57,43,0.45);
 }
-.fbr-alert-title {
+.obk-alert-title {
     font-weight: 600;
     margin-bottom: 4px;
 }
-.fbr-log {
+.obk-log {
     background: #1e1e1e;
     color: #e0e0e0;
     padding: 12px 14px;
@@ -48,36 +48,36 @@
     font-size: 0.85em;
     margin: 0;
 }
-.fbr-actions {
+.obk-actions {
     display: flex;
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
     margin-top: 10px;
 }
-.fbr-loading {
+.obk-loading {
     display: flex;
     align-items: center;
     gap: 8px;
     font-style: italic;
     opacity: 0.85;
 }
-.fbr-existing {
+.obk-existing {
     border-top: 1px solid rgba(127,127,127,0.25);
     margin-top: 18px;
     padding-top: 16px;
 }
-.fbr-file-input {
+.obk-file-input {
     margin-bottom: 12px;
 }
-.fbr-file-row {
+.obk-file-row {
     display: flex;
     align-items: center;
     gap: 10px;
     margin-bottom: 12px;
     flex-wrap: wrap;
 }
-.fbr-file-label {
+.obk-file-label {
     display: inline-block;
     padding: 6px 14px;
     border: 1px solid rgba(127,127,127,0.4);
@@ -86,14 +86,14 @@
     background: rgba(127,127,127,0.08);
     user-select: none;
 }
-.fbr-file-label:hover {
+.obk-file-label:hover {
     background: rgba(127,127,127,0.16);
 }
-.fbr-file-name {
+.obk-file-name {
     opacity: 0.8;
     font-size: 0.92em;
 }
-.fbr-spinner {
+.obk-spinner {
     width: 15px;
     height: 15px;
     flex: 0 0 auto;
@@ -101,50 +101,50 @@
     border-top-color: currentColor;
     border-radius: 50%;
     display: inline-block;
-    animation: fbr-spin 0.7s linear infinite;
+    animation: obk-spin 0.7s linear infinite;
 }
-@keyframes fbr-spin {
+@keyframes obk-spin {
     to { transform: rotate(360deg); }
 }
 </style>
 
-<div class="fbr-wrap">
+<div class="obk-wrap">
 <h2><%:Бэкап и восстановление overlay%></h2>
-<p class="fbr-desc">
+<p class="obk-desc">
 <%:Здесь можно создать полную сжатую копию раздела /overlay (все установленные пакеты, конфигурация и изменённые файлы), скачать её для хранения вне устройства, а также восстановить overlay из ранее сохранённого архива - например, после сброса настроек или перепрошивки.%>
 </p>
 
-<div class="fbr-card">
+<div class="obk-card">
     <h3><%:Создание бэкапа%></h3>
-    <p class="fbr-card-desc"><%:Соберёт текущее содержимое /overlay в архив overlay.tar.gz, который затем можно скачать.%></p>
+    <p class="obk-card-desc"><%:Соберёт текущее содержимое /overlay в архив overlay.tar.gz, который затем можно скачать.%></p>
 
     <% if error_log then %>
-        <div class="fbr-alert fbr-alert-error">
-            <div class="fbr-alert-title"><%:Ошибка создания бэкапа%></div>
+        <div class="obk-alert obk-alert-error">
+            <div class="obk-alert-title"><%:Ошибка создания бэкапа%></div>
             <div><%:Команда tar завершилась с ошибкой:%></div>
         </div>
-        <pre class="fbr-log"><%=pcdata(error_log)%></pre>
+        <pre class="obk-log"><%=pcdata(error_log)%></pre>
     <% end %>
 
-    <form method="post" action="<%=url('admin/system/fullbackuprestore/create_backup')%>" onsubmit="return showLoadingMessage()">
-        <div class="fbr-actions">
+    <form method="post" action="<%=url('admin/system/overlaybackup/create_backup')%>" onsubmit="return showLoadingMessage()">
+        <div class="obk-actions">
             <input type="submit" class="cbi-button cbi-button-apply" value="<%:Создать бэкап%>" />
-            <div id="loading-message" class="fbr-loading" style="display:none;">
-                <span class="fbr-spinner"></span>
+            <div id="loading-message" class="obk-loading" style="display:none;">
+                <span class="obk-spinner"></span>
                 <span><%:Создание бэкапа, подождите...%></span>
             </div>
         </div>
     </form>
 
     <% if nixio.fs.access("/tmp/overlay.tar.gz") then %>
-        <div class="fbr-existing">
+        <div class="obk-existing">
             <h3><%:Существующий бэкап%></h3>
-            <p class="fbr-card-desc"><%:Файл бэкапа уже подготовлен в /tmp/. Скачайте его для хранения вне устройства или удалите.%></p>
-            <div class="fbr-actions">
-                <form method="get" action="<%=url('admin/system/fullbackuprestore/download')%>" style="margin:0;">
+            <p class="obk-card-desc"><%:Файл бэкапа уже подготовлен в /tmp/. Скачайте его для хранения вне устройства или удалите.%></p>
+            <div class="obk-actions">
+                <form method="get" action="<%=url('admin/system/overlaybackup/download')%>" style="margin:0;">
                     <input type="submit" class="cbi-button cbi-button-add" value="<%:Скачать бэкап%>" />
                 </form>
-                <form method="post" action="<%=url('admin/system/fullbackuprestore/delete_backup')%>" style="margin:0;">
+                <form method="post" action="<%=url('admin/system/overlaybackup/delete_backup')%>" style="margin:0;">
                     <input type="submit" class="cbi-button cbi-button-reset" value="<%:Удалить бэкап%>" />
                 </form>
             </div>
@@ -152,40 +152,40 @@
     <% end %>
 </div>
 
-<div class="fbr-card">
+<div class="obk-card">
     <h3><%:Восстановление из архива%></h3>
-    <p class="fbr-card-desc">
+    <p class="obk-card-desc">
     <%:Загрузите ранее сохранённый overlay.tar.gz - его содержимое перезапишет текущие файлы overlay. После восстановления устройство автоматически перезагрузится.%>
     </p>
 
     <% if restore_ok ~= nil then %>
         <% if restore_ok then %>
-            <div class="fbr-alert fbr-alert-success">
-                <div class="fbr-alert-title"><%:Восстановление выполнено%></div>
+            <div class="obk-alert obk-alert-success">
+                <div class="obk-alert-title"><%:Восстановление выполнено%></div>
                 <div id="reboot-notice"><%:Устройство перезагружается, страница станет недоступна на 1-2 минуты...%></div>
             </div>
         <% else %>
-            <div class="fbr-alert fbr-alert-error">
-                <div class="fbr-alert-title"><%:Ошибка восстановления%></div>
+            <div class="obk-alert obk-alert-error">
+                <div class="obk-alert-title"><%:Ошибка восстановления%></div>
             </div>
         <% end %>
         <% if restore_log and restore_log:match("%S") then %>
-            <pre class="fbr-log"><%=pcdata(restore_log)%></pre>
+            <pre class="obk-log"><%=pcdata(restore_log)%></pre>
         <% end %>
     <% end %>
 
-    <form method="post" action="<%=url('admin/system/fullbackuprestore/restore')%>" enctype="multipart/form-data"
+    <form method="post" action="<%=url('admin/system/overlaybackup/restore')%>" enctype="multipart/form-data"
           onsubmit="return confirmRestore()">
-        <div class="fbr-file-row">
-            <label for="archive-file" class="fbr-file-label"><%:Выбрать файл%></label>
+        <div class="obk-file-row">
+            <label for="archive-file" class="obk-file-label"><%:Выбрать файл%></label>
             <input id="archive-file" type="file" name="archive" accept=".tar.gz,.tgz"
                    style="display:none;" onchange="updateArchiveFileName(this)" />
-            <span id="archive-file-name" class="fbr-file-name"></span>
+            <span id="archive-file-name" class="obk-file-name"></span>
         </div>
-        <div class="fbr-actions">
+        <div class="obk-actions">
             <input type="submit" class="cbi-button cbi-button-negative" value="<%:Восстановить бэкап%>" />
-            <div id="restore-loading-message" class="fbr-loading" style="display:none;">
-                <span class="fbr-spinner"></span>
+            <div id="restore-loading-message" class="obk-loading" style="display:none;">
+                <span class="obk-spinner"></span>
                 <span><%:Восстановление, подождите...%></span>
             </div>
         </div>
