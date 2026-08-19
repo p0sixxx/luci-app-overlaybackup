@@ -6,7 +6,7 @@
 Страница появляется в меню **Система → Бэкап и восстановление overlay**
 (`admin/system/overlaybackup`).
 
-Проверялось на Netis NX30 v2 / GL.iNet Flint 2 с ванильной OpenWrt25.12.5.
+Проверялось на Netis NX30 v2 / GL.iNet Flint 2 с ванильной OpenWrt 25.12.5.
 
 ## Возможности
 
