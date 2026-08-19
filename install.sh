@@ -9,8 +9,8 @@ set -e
 
 SRC_DIR="$(dirname "$0")"
 
-CTRL_SRC="$SRC_DIR/usr/lib/lua/luci/controller/overlaybackup.lua"
-VIEW_SRC="$SRC_DIR/usr/lib/lua/luci/view/overlaybackup.htm"
+CTRL_SRC="$SRC_DIR/luasrc/controller/overlaybackup.lua"
+VIEW_SRC="$SRC_DIR/luasrc/view/overlaybackup.htm"
 
 for f in "$CTRL_SRC" "$VIEW_SRC"; do
 	if [ ! -f "$f" ]; then
@@ -37,6 +37,15 @@ mkdir -p /usr/lib/lua/luci/controller /usr/lib/lua/luci/view
 
 cp "$CTRL_SRC" /usr/lib/lua/luci/controller/overlaybackup.lua
 cp "$VIEW_SRC" /usr/lib/lua/luci/view/overlaybackup.htm
+
+# Каталоги переводов, если они собраны рядом (файлы *.lmo). Без них
+# интерфейс показывает исходные английские строки - это штатное поведение
+# LuCI, а не ошибка. Русский интерфейс даёт пакет luci-i18n-overlaybackup-ru.
+for lmo in "$SRC_DIR"/po/*/*.lmo; do
+	[ -f "$lmo" ] || continue
+	mkdir -p /usr/lib/lua/luci/i18n
+	cp "$lmo" /usr/lib/lua/luci/i18n/
+done
 
 # Сброс кэшей LuCI, иначе новая страница не появится в меню.
 rm -f /tmp/luci-indexcache* 2>/dev/null || true

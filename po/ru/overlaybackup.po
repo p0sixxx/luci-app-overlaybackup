@@ -1,0 +1,80 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Project-Id-Version: luci-app-overlaybackup\n"
+"Language: ru\n"
+"Language-Team: none\n"
+"PO-Revision-Date: 2026-08-19 00:00+0000\n"
+"Last-Translator: none\n"
+"MIME-Version: 1.0\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "Overlay backup and restore"
+msgstr "Бэкап и восстановление overlay"
+
+msgid "Here you can create a full compressed copy of the /overlay partition (every installed package, the configuration and the modified files), download it for off-device storage, and restore overlay from a previously saved archive - after a factory reset or a firmware upgrade, for instance."
+msgstr "Здесь можно создать полную сжатую копию раздела /overlay (все установленные пакеты, конфигурация и изменённые файлы), скачать её для хранения вне устройства, а также восстановить overlay из ранее сохранённого архива - например, после сброса настроек или перепрошивки."
+
+msgid "Creating a backup"
+msgstr "Создание бэкапа"
+
+msgid "Packs the current contents of /overlay into an archive that can then be downloaded. The archive name is made up of the device name and the date."
+msgstr "Соберёт текущее содержимое /overlay в архив, который затем можно скачать. Имя архива складывается из имени устройства и даты."
+
+msgid "Backup failed"
+msgstr "Ошибка создания бэкапа"
+
+msgid "The tar command exited with an error:"
+msgstr "Команда tar завершилась с ошибкой:"
+
+msgid "Create backup"
+msgstr "Создать бэкап"
+
+msgid "Creating the backup, please wait..."
+msgstr "Создание бэкапа, подождите..."
+
+msgid "Existing backup"
+msgstr "Существующий бэкап"
+
+msgid "The archive is ready in /tmp. Download it for off-device storage, or delete it."
+msgstr "Архив подготовлен в /tmp. Скачайте его для хранения вне устройства или удалите."
+
+msgid "Download backup"
+msgstr "Скачать бэкап"
+
+msgid "Delete backup"
+msgstr "Удалить бэкап"
+
+msgid "Restoring from an archive"
+msgstr "Восстановление из архива"
+
+msgid "Upload a previously saved archive - its contents will overwrite the current overlay files. The device reboots automatically once the restore is done."
+msgstr "Загрузите ранее сохранённый архив - его содержимое перезапишет текущие файлы overlay. После восстановления устройство автоматически перезагрузится."
+
+msgid "Restore completed"
+msgstr "Восстановление выполнено"
+
+msgid "The device is rebooting, this page will be unavailable for 1-2 minutes..."
+msgstr "Устройство перезагружается, страница станет недоступна на 1-2 минуты..."
+
+msgid "Restore failed"
+msgstr "Ошибка восстановления"
+
+msgid "Choose file"
+msgstr "Выбрать файл"
+
+msgid "Restore backup"
+msgstr "Восстановить бэкап"
+
+msgid "Restoring, please wait..."
+msgstr "Восстановление, подождите..."
+
+msgid "Select a backup file first."
+msgstr "Сначала выберите файл резервной копии."
+
+msgid "The overlay files will be overwritten with the contents of the archive, after which the device reboots automatically. Continue?"
+msgstr "Файлы overlay будут перезаписаны содержимым архива, после чего устройство автоматически перезагрузится. Продолжить?"
+
+msgid "The archive file was not received. Make sure you selected a file before pressing the button."
+msgstr "Файл архива не был получен. Убедитесь, что вы выбрали файл перед нажатием кнопки."

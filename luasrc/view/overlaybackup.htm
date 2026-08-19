@@ -110,46 +110,46 @@
 </style>
 
 <div class="obk-wrap">
-<h2><%:Бэкап и восстановление overlay%></h2>
+<h2><%:Overlay backup and restore%></h2>
 <p class="obk-desc">
-<%:Здесь можно создать полную сжатую копию раздела /overlay (все установленные пакеты, конфигурация и изменённые файлы), скачать её для хранения вне устройства, а также восстановить overlay из ранее сохранённого архива - например, после сброса настроек или перепрошивки.%>
+<%:Here you can create a full compressed copy of the /overlay partition (every installed package, the configuration and the modified files), download it for off-device storage, and restore overlay from a previously saved archive - after a factory reset or a firmware upgrade, for instance.%>
 </p>
 
 <div class="obk-card">
-    <h3><%:Создание бэкапа%></h3>
-    <p class="obk-card-desc"><%:Соберёт текущее содержимое /overlay в архив, который затем можно скачать. Имя архива складывается из имени устройства и даты.%></p>
+    <h3><%:Creating a backup%></h3>
+    <p class="obk-card-desc"><%:Packs the current contents of /overlay into an archive that can then be downloaded. The archive name is made up of the device name and the date.%></p>
 
     <% if error_log then %>
         <div class="obk-alert obk-alert-error">
-            <div class="obk-alert-title"><%:Ошибка создания бэкапа%></div>
-            <div><%:Команда tar завершилась с ошибкой:%></div>
+            <div class="obk-alert-title"><%:Backup failed%></div>
+            <div><%:The tar command exited with an error:%></div>
         </div>
         <pre class="obk-log"><%=pcdata(error_log)%></pre>
     <% end %>
 
     <form method="post" action="<%=url('admin/system/overlaybackup/create_backup')%>" onsubmit="return showLoadingMessage()">
         <div class="obk-actions">
-            <input type="submit" class="cbi-button cbi-button-apply" value="<%:Создать бэкап%>" />
+            <input type="submit" class="cbi-button cbi-button-apply" value="<%:Create backup%>" />
             <div id="loading-message" class="obk-loading" style="display:none;">
                 <span class="obk-spinner"></span>
-                <span><%:Создание бэкапа, подождите...%></span>
+                <span><%:Creating the backup, please wait...%></span>
             </div>
         </div>
     </form>
 
     <% if backup_name then %>
         <div class="obk-existing">
-            <h3><%:Существующий бэкап%></h3>
+            <h3><%:Existing backup%></h3>
             <p class="obk-card-desc">
-            <%:Архив подготовлен в /tmp. Скачайте его для хранения вне устройства или удалите.%>
+            <%:The archive is ready in /tmp. Download it for off-device storage, or delete it.%>
             <br /><code class="obk-file-name-code"><%=pcdata(backup_name)%></code>
             </p>
             <div class="obk-actions">
                 <form method="get" action="<%=url('admin/system/overlaybackup/download')%>" style="margin:0;">
-                    <input type="submit" class="cbi-button cbi-button-add" value="<%:Скачать бэкап%>" />
+                    <input type="submit" class="cbi-button cbi-button-add" value="<%:Download backup%>" />
                 </form>
                 <form method="post" action="<%=url('admin/system/overlaybackup/delete_backup')%>" style="margin:0;">
-                    <input type="submit" class="cbi-button cbi-button-reset" value="<%:Удалить бэкап%>" />
+                    <input type="submit" class="cbi-button cbi-button-reset" value="<%:Delete backup%>" />
                 </form>
             </div>
         </div>
@@ -157,20 +157,20 @@
 </div>
 
 <div class="obk-card">
-    <h3><%:Восстановление из архива%></h3>
+    <h3><%:Restoring from an archive%></h3>
     <p class="obk-card-desc">
-    <%:Загрузите ранее сохранённый архив - его содержимое перезапишет текущие файлы overlay. После восстановления устройство автоматически перезагрузится.%>
+    <%:Upload a previously saved archive - its contents will overwrite the current overlay files. The device reboots automatically once the restore is done.%>
     </p>
 
     <% if restore_ok ~= nil then %>
         <% if restore_ok then %>
             <div class="obk-alert obk-alert-success">
-                <div class="obk-alert-title"><%:Восстановление выполнено%></div>
-                <div id="reboot-notice"><%:Устройство перезагружается, страница станет недоступна на 1-2 минуты...%></div>
+                <div class="obk-alert-title"><%:Restore completed%></div>
+                <div id="reboot-notice"><%:The device is rebooting, this page will be unavailable for 1-2 minutes...%></div>
             </div>
         <% else %>
             <div class="obk-alert obk-alert-error">
-                <div class="obk-alert-title"><%:Ошибка восстановления%></div>
+                <div class="obk-alert-title"><%:Restore failed%></div>
             </div>
         <% end %>
         <% if restore_log and restore_log:match("%S") then %>
@@ -181,16 +181,16 @@
     <form method="post" action="<%=url('admin/system/overlaybackup/restore')%>" enctype="multipart/form-data"
           onsubmit="return confirmRestore()">
         <div class="obk-file-row">
-            <label for="archive-file" class="obk-file-label"><%:Выбрать файл%></label>
+            <label for="archive-file" class="obk-file-label"><%:Choose file%></label>
             <input id="archive-file" type="file" name="archive" accept=".tar.gz,.tgz"
                    style="display:none;" onchange="updateArchiveFileName(this)" />
             <span id="archive-file-name" class="obk-file-name"></span>
         </div>
         <div class="obk-actions">
-            <input type="submit" class="cbi-button cbi-button-negative" value="<%:Восстановить бэкап%>" />
+            <input type="submit" class="cbi-button cbi-button-negative" value="<%:Restore backup%>" />
             <div id="restore-loading-message" class="obk-loading" style="display:none;">
                 <span class="obk-spinner"></span>
-                <span><%:Восстановление, подождите...%></span>
+                <span><%:Restoring, please wait...%></span>
             </div>
         </div>
     </form>
@@ -216,12 +216,11 @@ function confirmRestore() {
     // у невидимого элемента и молча отменяет отправку. Проверяем сами.
     var input = document.getElementById("archive-file");
     if (!input.files || input.files.length === 0) {
-        alert("Сначала выберите файл резервной копии.");
+        alert("<%:Select a backup file first.%>");
         return false;
     }
 
-    var msg = "Файлы overlay будут перезаписаны содержимым архива, " +
-              "после чего устройство автоматически перезагрузится. Продолжить?";
+    var msg = "<%:The overlay files will be overwritten with the contents of the archive, after which the device reboots automatically. Continue?%>";
     if (!confirm(msg)) {
         return false;
     }

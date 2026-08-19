@@ -11,6 +11,6 @@ NAME="luci-app-overlaybackup"
 OUT="$NAME.zip"
 
 rm -f "$OUT"
-zip -r "$OUT" usr install.sh uninstall.sh README.md -x '*.DS_Store' >/dev/null
+zip -r "$OUT" luasrc po install.sh uninstall.sh README.md -x '*.DS_Store' >/dev/null
 
 echo "Собрано: $OUT"

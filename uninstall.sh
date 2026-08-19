@@ -7,7 +7,8 @@
 set -e
 
 # Текущие файлы плагина и файлы прежних версий (fullbackup, fullbackuprestore).
-rm -f /usr/lib/lua/luci/controller/overlaybackup.lua \
+rm -f /usr/lib/lua/luci/i18n/overlaybackup.*.lmo \
+      /usr/lib/lua/luci/controller/overlaybackup.lua \
       /usr/lib/lua/luci/controller/fullbackup.lua \
       /usr/lib/lua/luci/controller/fullbackuprestore.lua \
       /usr/lib/lua/luci/view/overlaybackup.htm \

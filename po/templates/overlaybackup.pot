@@ -1,0 +1,79 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Project-Id-Version: luci-app-overlaybackup\n"
+"Language-Team: none\n"
+"PO-Revision-Date: 2026-08-19 00:00+0000\n"
+"Last-Translator: none\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+
+msgid "Overlay backup and restore"
+msgstr ""
+
+msgid "Here you can create a full compressed copy of the /overlay partition (every installed package, the configuration and the modified files), download it for off-device storage, and restore overlay from a previously saved archive - after a factory reset or a firmware upgrade, for instance."
+msgstr ""
+
+msgid "Creating a backup"
+msgstr ""
+
+msgid "Packs the current contents of /overlay into an archive that can then be downloaded. The archive name is made up of the device name and the date."
+msgstr ""
+
+msgid "Backup failed"
+msgstr ""
+
+msgid "The tar command exited with an error:"
+msgstr ""
+
+msgid "Create backup"
+msgstr ""
+
+msgid "Creating the backup, please wait..."
+msgstr ""
+
+msgid "Existing backup"
+msgstr ""
+
+msgid "The archive is ready in /tmp. Download it for off-device storage, or delete it."
+msgstr ""
+
+msgid "Download backup"
+msgstr ""
+
+msgid "Delete backup"
+msgstr ""
+
+msgid "Restoring from an archive"
+msgstr ""
+
+msgid "Upload a previously saved archive - its contents will overwrite the current overlay files. The device reboots automatically once the restore is done."
+msgstr ""
+
+msgid "Restore completed"
+msgstr ""
+
+msgid "The device is rebooting, this page will be unavailable for 1-2 minutes..."
+msgstr ""
+
+msgid "Restore failed"
+msgstr ""
+
+msgid "Choose file"
+msgstr ""
+
+msgid "Restore backup"
+msgstr ""
+
+msgid "Restoring, please wait..."
+msgstr ""
+
+msgid "Select a backup file first."
+msgstr ""
+
+msgid "The overlay files will be overwritten with the contents of the archive, after which the device reboots automatically. Continue?"
+msgstr ""
+
+msgid "The archive file was not received. Make sure you selected a file before pressing the button."
+msgstr ""

@@ -1,8 +1,17 @@
 module("luci.controller.overlaybackup", package.seeall)
 
+local i18n = require "luci.i18n"
+
+-- Каталог переводов пакета: /usr/lib/lua/luci/i18n/overlaybackup.<язык>.lmo
+-- Его ставит подпакет luci-i18n-overlaybackup-<язык>. Если каталога нет,
+-- LuCI показывает исходные английские строки.
+local I18N_CATALOG = "overlaybackup"
+
 function index()
-    entry({"admin", "system", "overlaybackup"}, firstchild(), _("Бэкап и восстановление overlay"), 60).dependent = false
-    entry({"admin", "system", "overlaybackup", "backup"}, call("action_backup_page"), _("Бэкап и восстановление overlay"), 10)
+    i18n.loadc(I18N_CATALOG)
+
+    entry({"admin", "system", "overlaybackup"}, firstchild(), _("Overlay backup and restore"), 60).dependent = false
+    entry({"admin", "system", "overlaybackup", "backup"}, call("action_backup_page"), _("Overlay backup and restore"), 10)
     entry({"admin", "system", "overlaybackup", "create_backup"}, call("create_backup"), nil)
     entry({"admin", "system", "overlaybackup", "delete_backup"}, call("delete_backup"), nil)
     entry({"admin", "system", "overlaybackup", "download"}, call("download_backup"), nil)
@@ -61,6 +70,9 @@ end
 function action_backup_page()
     local fs = require "nixio.fs"
     local tpl = require "luci.template"
+
+    i18n.loadc(I18N_CATALOG)
+
     local backup_file = find_backup()
     local log_file = "/tmp/overlay-backup.log"
     local restore_ok_file = "/tmp/overlay-restore-success.log"
@@ -187,6 +199,9 @@ end
 
 function restore_backup()
     local fs = require "nixio.fs"
+
+    i18n.loadc(I18N_CATALOG)
+
     local upload_path = "/tmp/overlay-restore-upload.tar.gz"
     local ok_file = "/tmp/overlay-restore-success.log"
     local err_file = "/tmp/overlay-restore-error.log"
@@ -216,7 +231,8 @@ function restore_backup()
     luci.http.formvalue("archive")
 
     if not fs.access(upload_path) then
-        fs.writefile(err_file, "Файл архива не был получен. Убедитесь, что вы выбрали файл перед нажатием кнопки.\n")
+        fs.writefile(err_file, i18n.translate(
+            "The archive file was not received. Make sure you selected a file before pressing the button.") .. "\n")
         luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
         return
     end

@@ -6,7 +6,8 @@
 `/overlay` прямо из веб-интерфейса роутера.
 
 Страница появляется в меню **Система → Бэкап и восстановление overlay**
-(`admin/system/overlaybackup`).
+(`admin/system/overlaybackup`) и следует языку, выбранному в LuCI: русский и
+английский.
 
 Проверялось на Netis NX30 v2 / GL.iNet Flint 2 с ванильной OpenWrt 25.12.5.
 
@@ -29,8 +30,8 @@
 С компьютера, где лежит распакованный проект:
 
 ```sh
-scp usr/lib/lua/luci/controller/overlaybackup.lua root@<IP роутера>:/usr/lib/lua/luci/controller/overlaybackup.lua
-scp usr/lib/lua/luci/view/overlaybackup.htm       root@<IP роутера>:/usr/lib/lua/luci/view/overlaybackup.htm
+scp luasrc/controller/overlaybackup.lua root@<IP роутера>:/usr/lib/lua/luci/controller/overlaybackup.lua
+scp luasrc/view/overlaybackup.htm       root@<IP роутера>:/usr/lib/lua/luci/view/overlaybackup.htm
 ```
 
 Затем на роутере сбросить кэш LuCI и перезапустить веб-сервер:
@@ -51,6 +52,30 @@ git clone https://github.com/p0sixxx/luci-app-overlaybackup.git package/luci-app
 make menuconfig      # LuCI -> 3. Applications -> luci-app-overlaybackup
 make package/luci-app-overlaybackup/compile V=s
 ```
+
+### Язык интерфейса
+
+Переводы устроены так же, как в остальных пакетах LuCI: исходные строки в коде
+английские, переводы лежат в `po/<язык>/overlaybackup.po` и при сборке пакета
+компилируются в каталоги `.lmo`. Каждому языку соответствует отдельный
+подпакет, который `luci.mk` создаёт автоматически:
+
+```sh
+opkg install luci-i18n-overlaybackup-ru
+```
+
+После установки страница следует языку, выбранному в **Система → Язык и
+оформление**, и переключается вместе со всем остальным интерфейсом LuCI.
+
+Каталог переводов ставится в `/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo`.
+Если его нет — например, при установке копированием файлов, — страница
+показывает исходные английские строки. Это штатное поведение LuCI, а не
+ошибка: чтобы получить русский интерфейс при ручной установке, положите
+собранный `.lmo` в `po/ru/` рядом с `.po`, и `install.sh` перенесёт его сам.
+
+Чтобы добавить ещё один язык, скопируйте `po/templates/overlaybackup.pot`
+в `po/<код языка>/overlaybackup.po` и переведите строки — подпакет для него
+появится сам.
 
 ### Зависимости
 
@@ -105,11 +130,13 @@ RAM обрывало ответ, и браузер показывал **Bad Requ
 ## Структура репозитория
 
 ```
-usr/lib/lua/luci/controller/overlaybackup.lua   контроллер (маршруты и логика)
-usr/lib/lua/luci/view/overlaybackup.htm         шаблон страницы
-Makefile                                        сборка пакета для OpenWrt
-install.sh / uninstall.sh                       установка вручную, запускать на роутере
-make-zip.sh                                     сборка zip с раскладкой от корня ФС
+luasrc/controller/overlaybackup.lua   контроллер (маршруты и логика)
+luasrc/view/overlaybackup.htm         шаблон страницы
+po/templates/overlaybackup.pot        шаблон для новых переводов
+po/ru/overlaybackup.po                русский перевод
+Makefile                              сборка пакета для OpenWrt
+install.sh / uninstall.sh             установка вручную, запускать на роутере
+make-zip.sh                           сборка zip с исходниками плагина
 ```
 
 ## Предупреждение
@@ -134,8 +161,9 @@ GPL-2.0-or-later.
 LuCI plugin for OpenWrt: backup and restore of the `/overlay` partition
 straight from the router's web interface.
 
-The page shows up under **System → Бэкап и восстановление overlay**
-(`admin/system/overlaybackup`). The interface is in Russian.
+The page shows up under **System → Overlay backup and restore**
+(`admin/system/overlaybackup`) and follows the language selected in LuCI:
+English and Russian.
 
 Tested on Netis NX30 v2 / GL.iNet Flint 2 running vanilla OpenWrt 25.12.5.
 
@@ -158,8 +186,8 @@ Tested on Netis NX30 v2 / GL.iNet Flint 2 running vanilla OpenWrt 25.12.5.
 From the machine holding the unpacked project:
 
 ```sh
-scp usr/lib/lua/luci/controller/overlaybackup.lua root@<router IP>:/usr/lib/lua/luci/controller/overlaybackup.lua
-scp usr/lib/lua/luci/view/overlaybackup.htm       root@<router IP>:/usr/lib/lua/luci/view/overlaybackup.htm
+scp luasrc/controller/overlaybackup.lua root@<router IP>:/usr/lib/lua/luci/controller/overlaybackup.lua
+scp luasrc/view/overlaybackup.htm       root@<router IP>:/usr/lib/lua/luci/view/overlaybackup.htm
 ```
 
 Then drop the LuCI cache and restart the web server on the router:
@@ -180,6 +208,31 @@ git clone https://github.com/p0sixxx/luci-app-overlaybackup.git package/luci-app
 make menuconfig      # LuCI -> 3. Applications -> luci-app-overlaybackup
 make package/luci-app-overlaybackup/compile V=s
 ```
+
+### Interface language
+
+Translations work the way they do in every other LuCI package: the source
+strings in the code are English, the translations live in
+`po/<language>/overlaybackup.po` and are compiled into `.lmo` catalogs when the
+package is built. Each language gets its own subpackage, which `luci.mk`
+generates automatically:
+
+```sh
+opkg install luci-i18n-overlaybackup-ru
+```
+
+Once installed, the page follows the language chosen under **System → Language
+and Style** and switches along with the rest of the LuCI interface.
+
+The catalog is installed as `/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo`. When
+it is missing — after installing by copying the files, for instance — the page
+shows the English source strings. That is how LuCI is meant to behave, not a
+failure: to get a translated interface from a manual install, drop the compiled
+`.lmo` into `po/ru/` next to the `.po` and `install.sh` will carry it over.
+
+To add another language, copy `po/templates/overlaybackup.pot` to
+`po/<language code>/overlaybackup.po` and translate the strings — the
+subpackage for it appears on its own.
 
 ### Dependencies
 
@@ -233,11 +286,13 @@ delay, so that the HTTP response reaches the browser before the connection drops
 ## Repository layout
 
 ```
-usr/lib/lua/luci/controller/overlaybackup.lua   controller (routes and logic)
-usr/lib/lua/luci/view/overlaybackup.htm         page template
-Makefile                                        OpenWrt package build
-install.sh / uninstall.sh                       manual install, run on the router
-make-zip.sh                                     builds a zip laid out from the FS root
+luasrc/controller/overlaybackup.lua   controller (routes and logic)
+luasrc/view/overlaybackup.htm         page template
+po/templates/overlaybackup.pot        template for new translations
+po/ru/overlaybackup.po                Russian translation
+Makefile                              OpenWrt package build
+install.sh / uninstall.sh             manual install, run on the router
+make-zip.sh                           builds a zip with the plugin sources
 ```
 
 ## Warning
