@@ -2,9 +2,11 @@ module("luci.controller.overlaybackup", package.seeall)
 
 local i18n = require "luci.i18n"
 
--- Каталог переводов: /usr/lib/lua/luci/i18n/overlaybackup.<язык>.lmo
+-- Переводы подхватываются сами: диспетчер luci-lua-runtime на каждом запросе
+-- вызывает i18n.setlanguage(), а тот загружает ВСЕ файлы *.<язык>.lmo из
+-- /usr/lib/lua/luci/i18n, включая наш overlaybackup.<язык>.lmo. Загружать
+-- каталог поштучно не нужно, и функции для этого в рантайме нет.
 -- Если каталога нет, LuCI показывает исходные английские строки.
-local I18N_CATALOG = "overlaybackup"
 
 function index()
     -- Каталог здесь намеренно НЕ загружается. Дерево диспетчера кэшируется
@@ -73,8 +75,6 @@ end
 function action_backup_page()
     local fs = require "nixio.fs"
     local tpl = require "luci.template"
-
-    i18n.loadc(I18N_CATALOG)
 
     local backup_file = find_backup()
     local log_file = "/tmp/overlay-backup.log"
@@ -202,8 +202,6 @@ end
 
 function restore_backup()
     local fs = require "nixio.fs"
-
-    i18n.loadc(I18N_CATALOG)
 
     local upload_path = "/tmp/overlay-restore-upload.tar.gz"
     local ok_file = "/tmp/overlay-restore-success.log"

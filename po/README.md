@@ -14,11 +14,24 @@ Strings come from two places: `<%: %>` in the page template, and the Lua
 controller - the menu titles passed to `_()` plus the one message it
 writes out itself through `i18n.translate()`.
 
-Unlike a JavaScript LuCI app, this page is rendered on the router: the
-template and the controller resolve every string server-side through
-`luci.i18n`, which reads the catalog the controller loads with
-`i18n.loadc("overlaybackup")`. The catalog format and the key derivation
-are the same either way.
+Where the strings are resolved differs by kind, and the plugin does
+nothing to arrange either:
+
+* the page body is rendered on the router, so `<%: %>` and
+  `i18n.translate()` go through `luci.i18n` server-side. Nothing loads
+  the catalog explicitly - `luci-lua-runtime`'s dispatcher calls
+  `i18n.setlanguage()` on every request, and that loads *every*
+  `*.<lang>.lmo` in `/usr/lib/lua/luci/i18n` at once. There is no
+  per-package load function in that runtime at all.
+* the sidebar menu title is translated in the browser instead. `_()` in
+  the Lua dispatcher returns its argument untouched - it exists only so
+  the string can be extracted - and the menu is rendered client-side
+  from `window.TR`, the same flat table every JS LuCI app uses.
+
+Both paths key the message by the same hash of the same source string,
+which is why one catalog serves both. The browser side normalises the
+key with `trimws()` first, and that is why `extract.py` refuses msgids
+whose whitespace is not already normalised.
 
 The compiled catalog is committed at
 `runtime/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo` and installed to
