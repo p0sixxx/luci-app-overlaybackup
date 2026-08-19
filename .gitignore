@@ -1,0 +1,4 @@
+*.zip
+*.ipk
+*.tar.gz
+.DS_Store
