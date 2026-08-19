@@ -67,6 +67,10 @@
     margin-top: 18px;
     padding-top: 16px;
 }
+.obk-file-name-code {
+    font-size: 0.9em;
+    word-break: break-all;
+}
 .obk-file-row {
     display: flex;
     align-items: center;
@@ -113,7 +117,7 @@
 
 <div class="obk-card">
     <h3><%:Создание бэкапа%></h3>
-    <p class="obk-card-desc"><%:Соберёт текущее содержимое /overlay в архив overlay.tar.gz, который затем можно скачать.%></p>
+    <p class="obk-card-desc"><%:Соберёт текущее содержимое /overlay в архив, который затем можно скачать. Имя архива складывается из имени устройства и даты.%></p>
 
     <% if error_log then %>
         <div class="obk-alert obk-alert-error">
@@ -133,10 +137,13 @@
         </div>
     </form>
 
-    <% if nixio.fs.access("/tmp/overlay.tar.gz") then %>
+    <% if backup_name then %>
         <div class="obk-existing">
             <h3><%:Существующий бэкап%></h3>
-            <p class="obk-card-desc"><%:Файл бэкапа уже подготовлен в /tmp/. Скачайте его для хранения вне устройства или удалите.%></p>
+            <p class="obk-card-desc">
+            <%:Архив подготовлен в /tmp. Скачайте его для хранения вне устройства или удалите.%>
+            <br /><code class="obk-file-name-code"><%=pcdata(backup_name)%></code>
+            </p>
             <div class="obk-actions">
                 <form method="get" action="<%=url('admin/system/overlaybackup/download')%>" style="margin:0;">
                     <input type="submit" class="cbi-button cbi-button-add" value="<%:Скачать бэкап%>" />
@@ -152,7 +159,7 @@
 <div class="obk-card">
     <h3><%:Восстановление из архива%></h3>
     <p class="obk-card-desc">
-    <%:Загрузите ранее сохранённый overlay.tar.gz - его содержимое перезапишет текущие файлы overlay. После восстановления устройство автоматически перезагрузится.%>
+    <%:Загрузите ранее сохранённый архив - его содержимое перезапишет текущие файлы overlay. После восстановления устройство автоматически перезагрузится.%>
     </p>
 
     <% if restore_ok ~= nil then %>

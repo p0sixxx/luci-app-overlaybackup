@@ -15,7 +15,8 @@ rm -f /usr/lib/lua/luci/controller/overlaybackup.lua \
       /usr/lib/lua/luci/view/fullbackuprestore.htm 2>/dev/null || true
 
 # Временные файлы, которые плагин создаёт в /tmp.
-rm -f /tmp/overlay.tar.gz \
+rm -f /tmp/overlay-backup-*.tar.gz \
+      /tmp/overlay.tar.gz \
       /tmp/overlay-backup.log \
       /tmp/overlay-backup-exclude.list \
       /tmp/overlay-restore-upload.tar.gz \

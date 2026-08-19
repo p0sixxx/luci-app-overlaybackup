@@ -9,10 +9,59 @@ function index()
     entry({"admin", "system", "overlaybackup", "restore"}, call("restore_backup"), nil)
 end
 
+-- Архив в /tmp называется так же, как его получает браузер:
+-- overlay-backup-<имя устройства>-<ГГГГ-ММ-ДД>.tar.gz
+-- Поэтому фиксированного пути нет, и архив ищется по маске.
+local BACKUP_GLOB = "/tmp/overlay-backup-*.tar.gz"
+
+local function backup_filename()
+    local fs = require "nixio.fs"
+
+    local hostname = fs.readfile("/proc/sys/kernel/hostname") or ""
+    hostname = hostname:gsub("%s", "")
+    -- Оставляем только безопасные для имени файла символы: имя хоста
+    -- задаёт пользователь, и кавычка или слэш сломали бы заголовок
+    -- Content-Disposition.
+    hostname = hostname:gsub("[^%w%-_.]", "_")
+    if hostname == "" then
+        hostname = "openwrt"
+    end
+
+    return string.format("overlay-backup-%s-%s.tar.gz", hostname, os.date("%Y-%m-%d"))
+end
+
+-- Путь к самому свежему архиву в /tmp или nil, если архива нет.
+local function find_backup()
+    local p = io.popen("ls -1t " .. BACKUP_GLOB .. " 2>/dev/null")
+    if not p then
+        return nil
+    end
+    local path = p:read("*l")
+    p:close()
+
+    if path and path:match("%S") then
+        return path
+    end
+    return nil
+end
+
+-- Имя файла без каталога - его показываем на странице и отдаём браузеру.
+local function backup_basename(path)
+    return path and path:match("([^/]+)$") or nil
+end
+
+-- Удаляем все архивы разом: имя зависит от даты, поэтому за несколько
+-- дней их может накопиться несколько. Заодно подчищаем overlay.tar.gz -
+-- так архив назывался в прежних версиях плагина, и после обновления он
+-- иначе остался бы висеть в /tmp незамеченным.
+local function remove_backups()
+    os.execute("rm -f " .. BACKUP_GLOB .. " /tmp/overlay.tar.gz >/dev/null 2>&1")
+end
+
 function action_backup_page()
     local fs = require "nixio.fs"
     local tpl = require "luci.template"
-    local backup_file = "/tmp/overlay.tar.gz"
+    local backup_file = find_backup()
     local log_file = "/tmp/overlay-backup.log"
     local restore_ok_file = "/tmp/overlay-restore-success.log"
     local restore_err_file = "/tmp/overlay-restore-error.log"
@@ -21,7 +70,7 @@ function action_backup_page()
     -- попытки. Прочитали - тут же удаляем, чтобы при следующей
     -- перезагрузке страницы (без новой попытки) блок ошибки не висел.
     local error_log = nil
-    if not fs.access(backup_file) and fs.access(log_file) then
+    if not backup_file and fs.access(log_file) then
         error_log = fs.readfile(log_file)
         os.remove(log_file)
     end
@@ -40,6 +89,7 @@ function action_backup_page()
     end
 
     tpl.render("overlaybackup", {
+        backup_name = backup_basename(backup_file),
         error_log = error_log,
         restore_ok = restore_ok,
         restore_log = restore_log
@@ -47,7 +97,7 @@ function action_backup_page()
 end
 
 function create_backup()
-    local backup_file = "/tmp/overlay.tar.gz"
+    local backup_file = "/tmp/" .. backup_filename()
     local log_file = "/tmp/overlay-backup.log"
     local exclude_file = "/tmp/overlay-backup-exclude.list"
     local fs = require "nixio.fs"
@@ -81,47 +131,32 @@ function create_backup()
         backup_file, source_dir, exclude_file, log_file
     )
 
-    os.remove(backup_file)
+    -- Прежние архивы убираем до создания нового: их имена отличаются
+    -- датой, и иначе в /tmp копились бы копии за разные дни.
+    remove_backups()
     local ok = os.execute(cmd)
 
     if ok == true or ok == 0 then
         -- успех - лог и файл исключений больше не нужны
         os.remove(log_file)
         os.remove(exclude_file)
+    else
+        -- tar создаёт файл даже когда падает на полпути. Недоделанный
+        -- архив надо убрать: иначе страница сочтёт бэкап готовым и не
+        -- покажет лог ошибки, а пользователь скачает битый файл.
+        remove_backups()
+        os.remove(exclude_file)
     end
 
     luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
 end
 
--- Имя, под которым архив отдаётся браузеру:
--- overlay-backup-<имя устройства>-<ГГГГ-ММ-ДД>.tar.gz
--- Дата берётся из времени изменения самого архива, а не из момента
--- скачивания, чтобы повторная загрузка того же файла давала то же имя.
-local function backup_filename(mtime)
-    local fs = require "nixio.fs"
-
-    local hostname = fs.readfile("/proc/sys/kernel/hostname") or ""
-    hostname = hostname:gsub("%s", "")
-    -- В имени файла оставляем только безопасные символы: имя хоста
-    -- задаёт пользователь, и кавычка или слэш сломали бы заголовок
-    -- Content-Disposition.
-    hostname = hostname:gsub("[^%w%-_.]", "_")
-    if hostname == "" then
-        hostname = "openwrt"
-    end
-
-    return string.format(
-        "overlay-backup-%s-%s.tar.gz",
-        hostname, os.date("%Y-%m-%d", mtime or os.time())
-    )
-end
-
 function download_backup()
-    local backup_file = "/tmp/overlay.tar.gz"
+    local backup_file = find_backup()
     local fs = require "nixio.fs"
-    if fs.access(backup_file) then
+    if backup_file and fs.access(backup_file) then
         local stat = fs.stat(backup_file)
-        local name = backup_filename(stat and stat.mtime)
+        local name = backup_basename(backup_file)
 
         luci.http.header('Content-Disposition', 'attachment; filename="' .. name .. '"')
         if stat and stat.size then
@@ -226,12 +261,9 @@ function restore_backup()
 end
 
 function delete_backup()
-    local backup_file = "/tmp/overlay.tar.gz"
     local log_file = "/tmp/overlay-backup.log"
     local exclude_file = "/tmp/overlay-backup-exclude.list"
-    if nixio.fs.access(backup_file) then
-        os.remove(backup_file)
-    end
+    remove_backups()
     if nixio.fs.access(log_file) then
         os.remove(log_file)
     end
