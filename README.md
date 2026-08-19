@@ -48,12 +48,51 @@ scp runtime/usr/lib/lua/luci/view/overlaybackup.htm       root@<IP роутер�
 scp runtime/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo    root@<IP роутера>:/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo
 ```
 
-### Вариант 2: сборка ipk в OpenWrt SDK
+### Вариант 2: сборка пакета `.apk` в OpenWrt SDK
+
+Начиная с 25.12 OpenWrt использует менеджер пакетов **apk** вместо opkg, и
+сборка даёт `.apk`. Сам `Makefile` от менеджера пакетов не зависит — формат
+выбирает buildroot, так что ничего специально настраивать не нужно.
+
+Возьмите SDK ровно под свою версию и платформу — со страницы
+`https://downloads.openwrt.org/releases/25.12.5/targets/<target>/<subtarget>/`,
+файл `openwrt-sdk-*.tar.zst`. Распакуйте его и из каталога SDK:
 
 ```sh
+./scripts/feeds update -a
+./scripts/feeds install -a
 git clone https://github.com/p0sixxx/luci-app-overlaybackup.git package/luci-app-overlaybackup
-make menuconfig      # LuCI -> 3. Applications -> luci-app-overlaybackup
+make defconfig
 make package/luci-app-overlaybackup/compile V=s
+```
+
+Готовый пакет появится в `bin/packages/<архитектура>/base/`:
+
+```sh
+ls bin/packages/*/base/luci-app-overlaybackup-*.apk
+```
+
+Установка на роутер:
+
+```sh
+scp bin/packages/*/base/luci-app-overlaybackup-*.apk root@<IP роутера>:/tmp/
+ssh root@<IP роутера> 'apk add --allow-untrusted /tmp/luci-app-overlaybackup-*.apk'
+```
+
+`--allow-untrusted` здесь обязателен: пакет собран локально и не подписан
+ключом, которому доверяет роутер.
+
+Обновление той же командой поверх установленного пакета; удаление —
+`apk del luci-app-overlaybackup`.
+
+#### Выпуски до 24.10 включительно
+
+Там ещё opkg, и тот же `Makefile` без изменений даёт `.ipk`:
+
+```sh
+make package/luci-app-overlaybackup/compile V=s
+ls bin/packages/*/base/luci-app-overlaybackup_*.ipk
+opkg install ./luci-app-overlaybackup_*.ipk    # на роутере
 ```
 
 ### Язык интерфейса
@@ -75,11 +114,22 @@ make package/luci-app-overlaybackup/compile V=s
 ### Зависимости
 
 Страница написана на Lua (старый API LuCI), поэтому на современных сборках
-OpenWrt нужны пакеты `luci-compat`, `luci-lua-runtime` и `luci-lib-nixio`:
+OpenWrt нужны пакеты `luci-compat`, `luci-lua-runtime` и `luci-lib-nixio`.
+
+На 25.12 и новее:
+
+```sh
+apk update && apk add luci-compat luci-lua-runtime luci-lib-nixio
+```
+
+На выпусках до 24.10 включительно:
 
 ```sh
 opkg update && opkg install luci-compat luci-lua-runtime luci-lib-nixio
 ```
+
+При установке пакетом эти зависимости подтянутся сами — команды нужны только
+для установки копированием файлов.
 
 ## Как это устроено
 
@@ -201,12 +251,51 @@ scp runtime/usr/lib/lua/luci/view/overlaybackup.htm       root@<router IP>:/usr/
 scp runtime/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo    root@<router IP>:/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo
 ```
 
-### Option 2: building an ipk with the OpenWrt SDK
+### Option 2: building an `.apk` package with the OpenWrt SDK
+
+As of 25.12 OpenWrt uses the **apk** package manager instead of opkg, and a
+build produces an `.apk`. The `Makefile` itself does not depend on the package
+manager — the format is chosen by buildroot, so there is nothing to configure.
+
+Grab the SDK for exactly your version and platform from
+`https://downloads.openwrt.org/releases/25.12.5/targets/<target>/<subtarget>/`,
+the `openwrt-sdk-*.tar.zst` file. Unpack it, then from the SDK directory:
 
 ```sh
+./scripts/feeds update -a
+./scripts/feeds install -a
 git clone https://github.com/p0sixxx/luci-app-overlaybackup.git package/luci-app-overlaybackup
-make menuconfig      # LuCI -> 3. Applications -> luci-app-overlaybackup
+make defconfig
 make package/luci-app-overlaybackup/compile V=s
+```
+
+The package lands in `bin/packages/<architecture>/base/`:
+
+```sh
+ls bin/packages/*/base/luci-app-overlaybackup-*.apk
+```
+
+Installing it on the router:
+
+```sh
+scp bin/packages/*/base/luci-app-overlaybackup-*.apk root@<router IP>:/tmp/
+ssh root@<router IP> 'apk add --allow-untrusted /tmp/luci-app-overlaybackup-*.apk'
+```
+
+`--allow-untrusted` is required here: the package was built locally and is not
+signed by a key the router trusts.
+
+Upgrading is the same command over the installed package; removal is
+`apk del luci-app-overlaybackup`.
+
+#### Releases up to and including 24.10
+
+Those still use opkg, and the very same `Makefile` produces an `.ipk`:
+
+```sh
+make package/luci-app-overlaybackup/compile V=s
+ls bin/packages/*/base/luci-app-overlaybackup_*.ipk
+opkg install ./luci-app-overlaybackup_*.ipk    # on the router
 ```
 
 ### Interface language
@@ -228,11 +317,22 @@ collide with `luci-base` are all covered in [`po/README.md`](po/README.md).
 ### Dependencies
 
 The page is written in Lua (the old LuCI API), so on current OpenWrt builds it
-needs the `luci-compat`, `luci-lua-runtime` and `luci-lib-nixio` packages:
+needs the `luci-compat`, `luci-lua-runtime` and `luci-lib-nixio` packages.
+
+On 25.12 and newer:
+
+```sh
+apk update && apk add luci-compat luci-lua-runtime luci-lib-nixio
+```
+
+On releases up to and including 24.10:
 
 ```sh
 opkg update && opkg install luci-compat luci-lua-runtime luci-lib-nixio
 ```
+
+Installing the package pulls these in on its own — the commands are only needed
+when installing by copying the files.
 
 ## How it works
 

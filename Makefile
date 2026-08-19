@@ -4,8 +4,9 @@
 # This is free software, licensed under the GNU General Public License v2.
 #
 # Optional: the project is normally deployed by copying files onto the
-# router (see deploy/), but this builds a regular ipk when an OpenWrt
-# buildroot or SDK is at hand.
+# router (see deploy/), but this builds a regular package when an OpenWrt
+# buildroot or SDK is at hand. The format follows the target release -
+# .apk on 25.12 and newer, .ipk up to 24.10 - and needs nothing here.
 #
 
 include $(TOPDIR)/rules.mk
