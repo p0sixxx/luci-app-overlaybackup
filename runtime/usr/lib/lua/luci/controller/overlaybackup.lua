@@ -24,24 +24,52 @@ function index()
 end
 
 -- Архив в /tmp называется так же, как его получает браузер:
--- overlay-backup-<имя устройства>-<ГГГГ-ММ-ДД>.tar.gz
+-- overlay-backup-<имя устройства>-<версия OpenWrt>-<ГГГГ-ММ-ДД>.tar.gz
 -- Поэтому фиксированного пути нет, и архив ищется по маске.
 local BACKUP_GLOB = "/tmp/overlay-backup-*.tar.gz"
+
+-- Оставляем только безопасные для имени файла символы: имя хоста задаёт
+-- пользователь, а кавычка или слэш сломали бы заголовок Content-Disposition.
+local function safe_part(value)
+    value = (value or ""):gsub("%s", "")
+    return (value:gsub("[^%w%-_.]", "_"))
+end
+
+-- Версия прошивки: DISTRIB_RELEASE из /etc/openwrt_release, с откатом на
+-- VERSION_ID из /etc/os-release. На снапшотах это будет "SNAPSHOT", и это
+-- ровно то, что нужно знать про такой архив.
+local function openwrt_release()
+    local fs = require "nixio.fs"
+
+    local release = (fs.readfile("/etc/openwrt_release") or "")
+        :match("DISTRIB_RELEASE=[\"\']?([^\"\'\n]+)")
+
+    if not release then
+        release = (fs.readfile("/etc/os-release") or "")
+            :match("VERSION_ID=[\"\']?([^\"\'\n]+)")
+    end
+
+    return safe_part(release)
+end
 
 local function backup_filename()
     local fs = require "nixio.fs"
 
-    local hostname = fs.readfile("/proc/sys/kernel/hostname") or ""
-    hostname = hostname:gsub("%s", "")
-    -- Оставляем только безопасные для имени файла символы: имя хоста
-    -- задаёт пользователь, и кавычка или слэш сломали бы заголовок
-    -- Content-Disposition.
-    hostname = hostname:gsub("[^%w%-_.]", "_")
+    local hostname = safe_part(fs.readfile("/proc/sys/kernel/hostname"))
     if hostname == "" then
         hostname = "openwrt"
     end
 
-    return string.format("overlay-backup-%s-%s.tar.gz", hostname, os.date("%Y-%m-%d"))
+    -- Версия ставится отдельным полем между именем устройства и датой.
+    -- Если определить её не удалось, поле просто выпадает: лучше короткое
+    -- имя, чем слово-заглушка в нём.
+    local release = openwrt_release()
+    if release ~= "" then
+        release = release .. "-"
+    end
+
+    return string.format("overlay-backup-%s-%s%s.tar.gz",
+        hostname, release, os.date("%Y-%m-%d"))
 end
 
 -- Путь к самому свежему архиву в /tmp или nil, если архива нет.

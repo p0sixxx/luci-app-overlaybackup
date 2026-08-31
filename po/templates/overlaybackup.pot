@@ -18,7 +18,7 @@ msgstr ""
 msgid "Creating a backup"
 msgstr ""
 
-msgid "Packs the current contents of /overlay into an archive that can then be downloaded. The archive name is made up of the device name and the date."
+msgid "Packs the current contents of /overlay into an archive that can then be downloaded. The archive name is made up of the device name, the OpenWrt version and the date."
 msgstr ""
 
 msgid "Backup failed"

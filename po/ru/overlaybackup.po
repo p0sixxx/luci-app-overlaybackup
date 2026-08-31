@@ -19,8 +19,8 @@ msgstr "Здесь можно создать полную сжатую копи�
 msgid "Creating a backup"
 msgstr "Создание бэкапа"
 
-msgid "Packs the current contents of /overlay into an archive that can then be downloaded. The archive name is made up of the device name and the date."
-msgstr "Соберёт текущее содержимое /overlay в архив, который затем можно скачать. Имя архива складывается из имени устройства и даты."
+msgid "Packs the current contents of /overlay into an archive that can then be downloaded. The archive name is made up of the device name, the OpenWrt version and the date."
+msgstr "Соберёт текущее содержимое /overlay в архив, который затем можно скачать. Имя архива складывается из имени устройства, версии OpenWrt и даты."
 
 msgid "Backup failed"
 msgstr "Ошибка создания бэкапа"

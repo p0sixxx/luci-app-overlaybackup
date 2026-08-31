@@ -15,7 +15,7 @@
 
 * **Создание бэкапа** — всё содержимое overlay (установленные пакеты,
   конфигурация, изменённые и добавленные файлы) упаковывается в
-  `/tmp/overlay-backup-<имя устройства>-<ГГГГ-ММ-ДД>.tar.gz`.
+  `/tmp/overlay-backup-<имя устройства>-<версия OpenWrt>-<ГГГГ-ММ-ДД>.tar.gz`.
 * **Скачивание** готового архива для хранения вне устройства — под тем же
   именем, под каким он лежит в `/tmp`.
 * **Удаление** архива из `/tmp`, чтобы не занимать оперативную память.
@@ -147,11 +147,16 @@ opkg update && opkg install luci-compat luci-lua-runtime luci-lib-nixio
 
 ### Скачивание
 
-Имя архива собирается из имени устройства (`/proc/sys/kernel/hostname`,
-недопустимые для имени файла символы заменяются на `_`) и даты, и одинаково
-в `/tmp` и при скачивании. Фиксированного пути поэтому нет: архив ищется по
-маске `/tmp/overlay-backup-*.tar.gz`, а при создании нового прежние удаляются,
-чтобы копии за разные дни не занимали оперативную память.
+Имя архива собирается из трёх частей: имя устройства
+(`/proc/sys/kernel/hostname`), версия прошивки (`DISTRIB_RELEASE` из
+`/etc/openwrt_release`, с откатом на `VERSION_ID` из `/etc/os-release`) и дата.
+Недопустимые для имени файла символы в первых двух заменяются на `_`. Если
+версию определить не удалось, поле просто выпадает — лучше короткое имя, чем
+слово-заглушка в нём.
+
+Имя одинаково в `/tmp` и при скачивании, поэтому фиксированного пути нет: архив
+ищется по маске `/tmp/overlay-backup-*.tar.gz`, а при создании нового прежние
+удаляются, чтобы копии за разные дни не занимали оперативную память.
 
 Файл отдаётся блоками по 64 КБ и с заголовком `Content-Length`. Чтение
 архива целиком в память (`f:read("*a")`) на устройствах с небольшим объёмом
@@ -218,7 +223,7 @@ Tested on Netis NX30 v2 / GL.iNet Flint 2 running vanilla OpenWrt 25.12.5.
 
 * **Create a backup** — the entire overlay content (installed packages,
   configuration, modified and added files) is packed into
-  `/tmp/overlay-backup-<hostname>-<YYYY-MM-DD>.tar.gz`.
+  `/tmp/overlay-backup-<hostname>-<OpenWrt version>-<YYYY-MM-DD>.tar.gz`.
 * **Download** the resulting archive to keep it off the device, under the very
   same name it has in `/tmp`.
 * **Delete** the archive from `/tmp` so it stops using up RAM.
@@ -349,12 +354,17 @@ unpacking back onto overlayfs can fail with `Operation not permitted`.
 
 ### Downloading
 
-The archive name is built from the device hostname (`/proc/sys/kernel/hostname`,
-with characters unsafe for a file name replaced by `_`) and the date, and is the
-same in `/tmp` as it is when downloaded. There is therefore no fixed path: the
-archive is looked up by the `/tmp/overlay-backup-*.tar.gz` pattern, and creating a
-new one removes the previous archives so that copies from different days do not eat
-up RAM.
+The archive name is built from three parts: the device hostname
+(`/proc/sys/kernel/hostname`), the firmware version (`DISTRIB_RELEASE` from
+`/etc/openwrt_release`, falling back to `VERSION_ID` from `/etc/os-release`) and
+the date. Characters unsafe for a file name are replaced by `_` in the first two.
+If the version cannot be determined the field is simply left out - a shorter name
+beats a placeholder word inside it.
+
+The name is the same in `/tmp` as it is when downloaded, so there is no fixed
+path: the archive is looked up by the `/tmp/overlay-backup-*.tar.gz` pattern, and
+creating a new one removes the previous archives so that copies from different
+days do not eat up RAM.
 
 The file is served in 64 KiB blocks and with a `Content-Length` header. Reading
 the whole archive into memory (`f:read("*a")`) truncated the response on devices
