@@ -27,14 +27,37 @@
 
 ## Установка
 
-### Вариант 1: копирование файлов (без пересборки прошивки)
+### Вариант 1: установка с GitHub прямо на роутере
 
-Скопируйте каталог проекта на роутер и запустите установщик там:
+Ни `git`, ни компьютер посередине не нужны — на роутере:
 
 ```sh
-scp -r luci-app-overlaybackup root@<IP роутера>:/tmp/
+apk update
+apk add luci-compat luci-lua-runtime luci-lib-nixio tar
+
+cd /tmp
+wget -O overlaybackup.tar.gz https://github.com/p0sixxx/luci-app-overlaybackup/archive/refs/heads/main.tar.gz
+tar -xzf overlaybackup.tar.gz
+sh luci-app-overlaybackup-main/deploy/install.sh
+```
+
+Обновление — те же команды: `install.sh` перезаписывает файлы поверх.
+
+Если `wget` ругается на HTTPS — в образе нет SSL-библиотеки для
+`uclient-fetch`: `apk add libustream-mbedtls` и повторить.
+
+`/tmp` очищается при перезагрузке, так что для удаления плагина архив
+придётся скачать заново и запустить `deploy/uninstall.sh`.
+
+#### С компьютера через scp
+
+```sh
+scp -O -r luci-app-overlaybackup root@<IP роутера>:/tmp/
 ssh root@<IP роутера> 'sh /tmp/luci-app-overlaybackup/deploy/install.sh'
 ```
+
+`-O` обязателен: современный OpenSSH по умолчанию копирует через SFTP, а в
+OpenWrt `sftp-server` нет — без ключа получите `sftp-server: not found`.
 
 `deploy/install.sh` разложит файлы по путям из `deploy/MANIFEST`, удалит
 файлы прежних версий плагина, сбросит кэш LuCI и перезапустит `uhttpd`.
@@ -45,9 +68,21 @@ ssh root@<IP роутера> 'sh /tmp/luci-app-overlaybackup/deploy/install.sh'
 поэтому при желании можно скопировать файлы и поштучно:
 
 ```sh
-scp runtime/usr/lib/lua/luci/controller/overlaybackup.lua root@<IP роутера>:/usr/lib/lua/luci/controller/overlaybackup.lua
-scp runtime/usr/lib/lua/luci/view/overlaybackup.htm       root@<IP роутера>:/usr/lib/lua/luci/view/overlaybackup.htm
-scp runtime/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo    root@<IP роутера>:/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo
+scp -O runtime/etc/init.d/overlaybackup-restore             root@<IP роутера>:/etc/init.d/overlaybackup-restore
+scp -O runtime/usr/lib/lua/luci/controller/overlaybackup.lua root@<IP роутера>:/usr/lib/lua/luci/controller/overlaybackup.lua
+scp -O runtime/usr/lib/lua/luci/view/overlaybackup.htm       root@<IP роутера>:/usr/lib/lua/luci/view/overlaybackup.htm
+scp -O runtime/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo    root@<IP роутера>:/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo
+```
+
+После поштучного копирования init-скрипт нужно сделать исполняемым и
+включить — без него подготовленное восстановление никогда не применится:
+
+```sh
+chmod 0755 /etc/init.d/overlaybackup-restore
+/etc/init.d/overlaybackup-restore enable
+rm -f /tmp/luci-indexcache*
+rm -rf /tmp/luci-modulecache
+/etc/init.d/uhttpd restart
 ```
 
 ### Вариант 2: сборка пакета `.apk` в OpenWrt SDK
@@ -281,14 +316,37 @@ Tested on Netis NX30 v2 / GL.iNet Flint 2 running vanilla OpenWrt 25.12.5.
 
 ## Installation
 
-### Option 1: copying the files (no firmware rebuild)
+### Option 1: installing from GitHub right on the router
 
-Copy the project directory to the router and run the installer there:
+Neither `git` nor a computer in between is needed - on the router:
 
 ```sh
-scp -r luci-app-overlaybackup root@<router IP>:/tmp/
+apk update
+apk add luci-compat luci-lua-runtime luci-lib-nixio tar
+
+cd /tmp
+wget -O overlaybackup.tar.gz https://github.com/p0sixxx/luci-app-overlaybackup/archive/refs/heads/main.tar.gz
+tar -xzf overlaybackup.tar.gz
+sh luci-app-overlaybackup-main/deploy/install.sh
+```
+
+Updating is the same commands: `install.sh` overwrites the files in place.
+
+If `wget` complains about HTTPS, the image lacks the SSL library for
+`uclient-fetch`: `apk add libustream-mbedtls` and try again.
+
+`/tmp` is wiped on reboot, so to remove the plugin you will need to download
+the archive again and run `deploy/uninstall.sh`.
+
+#### From a computer over scp
+
+```sh
+scp -O -r luci-app-overlaybackup root@<router IP>:/tmp/
 ssh root@<router IP> 'sh /tmp/luci-app-overlaybackup/deploy/install.sh'
 ```
+
+`-O` is required: modern OpenSSH copies over SFTP by default, and OpenWrt ships
+no `sftp-server` - without the flag you get `sftp-server: not found`.
 
 `deploy/install.sh` lays the files out along the paths in `deploy/MANIFEST`,
 removes the files of earlier versions of the plugin, drops the LuCI cache and
@@ -299,9 +357,21 @@ Everything under `runtime/` mirrors the router's filesystem layout, so the
 files can just as well be copied one by one:
 
 ```sh
-scp runtime/usr/lib/lua/luci/controller/overlaybackup.lua root@<router IP>:/usr/lib/lua/luci/controller/overlaybackup.lua
-scp runtime/usr/lib/lua/luci/view/overlaybackup.htm       root@<router IP>:/usr/lib/lua/luci/view/overlaybackup.htm
-scp runtime/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo    root@<router IP>:/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo
+scp -O runtime/etc/init.d/overlaybackup-restore             root@<router IP>:/etc/init.d/overlaybackup-restore
+scp -O runtime/usr/lib/lua/luci/controller/overlaybackup.lua root@<router IP>:/usr/lib/lua/luci/controller/overlaybackup.lua
+scp -O runtime/usr/lib/lua/luci/view/overlaybackup.htm       root@<router IP>:/usr/lib/lua/luci/view/overlaybackup.htm
+scp -O runtime/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo    root@<router IP>:/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo
+```
+
+After copying file by file, the init script has to be made executable and
+enabled - without it a prepared restore is never applied:
+
+```sh
+chmod 0755 /etc/init.d/overlaybackup-restore
+/etc/init.d/overlaybackup-restore enable
+rm -f /tmp/luci-indexcache*
+rm -rf /tmp/luci-modulecache
+/etc/init.d/uhttpd restart
 ```
 
 ### Option 2: building an `.apk` package with the OpenWrt SDK
