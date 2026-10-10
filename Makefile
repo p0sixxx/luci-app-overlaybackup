@@ -49,6 +49,9 @@ define Package/luci-app-overlaybackup/install
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./runtime/etc/init.d/overlaybackup-restore \
 		$(1)/etc/init.d/overlaybackup-restore
+	$(INSTALL_DIR) $(1)/usr/libexec
+	$(INSTALL_BIN) ./runtime/usr/libexec/overlaybackup-stage \
+		$(1)/usr/libexec/overlaybackup-stage
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/controller
 	$(INSTALL_DATA) ./runtime/usr/lib/lua/luci/controller/overlaybackup.lua \
 		$(1)/usr/lib/lua/luci/controller/overlaybackup.lua
@@ -64,6 +67,16 @@ define Package/luci-app-overlaybackup/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
 /etc/init.d/overlaybackup-restore enable 2>/dev/null
+# uhttpd cuts any CGI request longer than script_timeout (60 s by default)
+# in total; large backups and restores need far more. See deploy/install.sh.
+cur=$$(uci -q get uhttpd.main.script_timeout)
+if [ -z "$$cur" ] || [ "$$cur" -lt 1800 ] 2>/dev/null; then
+	[ -n "$$(uci -q get uhttpd.main.overlaybackup_orig_timeout)" ] || \
+		uci set uhttpd.main.overlaybackup_orig_timeout="$${cur:-60}"
+	uci set uhttpd.main.script_timeout=1800
+	uci commit uhttpd
+	/etc/init.d/uhttpd restart
+fi
 rm -f /tmp/luci-indexcache* 2>/dev/null
 rm -rf /tmp/luci-modulecache 2>/dev/null
 exit 0
@@ -71,6 +84,12 @@ endef
 
 define Package/luci-app-overlaybackup/postrm
 #!/bin/sh
+orig=$$(uci -q get uhttpd.main.overlaybackup_orig_timeout)
+if [ -n "$$orig" ]; then
+	uci set uhttpd.main.script_timeout="$$orig"
+	uci -q delete uhttpd.main.overlaybackup_orig_timeout
+	uci commit uhttpd
+fi
 rm -f /etc/rc.d/S*overlaybackup-restore 2>/dev/null
 rm -rf /overlay/.overlaybackup 2>/dev/null
 rm -f /tmp/luci-indexcache* 2>/dev/null

@@ -58,6 +58,17 @@ rm -f /tmp/overlay-backup-*.tar.gz \
       /tmp/overlay-restore-success.log \
       /tmp/overlay-restore-error.log 2>/dev/null || true
 
+# Put uhttpd's script_timeout back to what it was before install.sh raised it.
+if command -v uci >/dev/null 2>&1; then
+	ORIG_TIMEOUT=$(uci -q get uhttpd.main.overlaybackup_orig_timeout || true)
+	if [ -n "$ORIG_TIMEOUT" ]; then
+		uci set uhttpd.main.script_timeout="$ORIG_TIMEOUT"
+		uci -q delete uhttpd.main.overlaybackup_orig_timeout || true
+		uci commit uhttpd
+		echo "  uhttpd  script_timeout restored to $ORIG_TIMEOUT"
+	fi
+fi
+
 rm -f /tmp/luci-indexcache* 2>/dev/null || true
 rm -rf /tmp/luci-modulecache 2>/dev/null || true
 

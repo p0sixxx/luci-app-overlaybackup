@@ -37,6 +37,12 @@ msgstr "Скачать архив"
 msgid "Restoring from an archive"
 msgstr "Восстановление из архива"
 
+msgid "Unpacking the archive"
+msgstr "Идёт распаковка архива"
+
+msgid "This can take a few minutes for a large overlay. The page refreshes on its own, and the device reboots as soon as the archive is ready."
+msgstr "Для большого overlay это может занять несколько минут. Страница обновляется сама, а устройство перезагрузится, как только архив будет готов."
+
 msgid "A restore is prepared"
 msgstr "Восстановление подготовлено"
 
@@ -58,8 +64,8 @@ msgstr "Выбрать файл"
 msgid "Restore and reboot"
 msgstr "Восстановить и перезагрузить"
 
-msgid "Uploading and unpacking, please wait..."
-msgstr "Загрузка и распаковка, подождите..."
+msgid "Uploading, please wait..."
+msgstr "Загрузка, подождите..."
 
 msgid "The overlay layer replaced by the last restore is kept at /overlay/.overlaybackup/previous as a way back. It is removed when the next restore is prepared."
 msgstr "Слой overlay, заменённый прошлым восстановлением, сохранён в /overlay/.overlaybackup/previous на случай отката. Он удаляется при подготовке следующего восстановления."
@@ -70,17 +76,17 @@ msgstr "Сначала выберите файл резервной копии."
 msgid "The current overlay will be replaced by the contents of the archive, and the device will reboot twice to apply it. Continue?"
 msgstr "Текущий overlay будет заменён содержимым архива, и устройство перезагрузится дважды, чтобы это применить. Продолжить?"
 
-msgid "This device does not use an /overlay/upper layer, so a staged restore is not possible."
-msgstr "На этом устройстве нет слоя /overlay/upper, поэтому восстановление с подменой слоя невозможно."
-
-msgid "The archive file was not received. Make sure you selected a file before pressing the button."
-msgstr "Файл архива не был получен. Убедитесь, что вы выбрали файл перед нажатием кнопки."
-
-msgid "The uploaded file is not a valid .tar.gz archive."
-msgstr "Загруженный файл не является корректным архивом .tar.gz."
-
 msgid "Unpacking the archive failed."
 msgstr "Распаковать архив не удалось."
 
 msgid "The archive does not look like an overlay backup: it has no etc directory. Nothing was changed."
 msgstr "Архив не похож на бэкап overlay: в нём нет каталога etc. Ничего не изменено."
+
+msgid "The archive file was not received. Make sure you selected a file before pressing the button."
+msgstr "Файл архива не был получен. Убедитесь, что вы выбрали файл перед нажатием кнопки."
+
+msgid "The unpacking process stopped before finishing. Nothing was changed."
+msgstr "Распаковка прервалась, не дойдя до конца. Ничего не изменено."
+
+msgid "This device does not use an /overlay/upper layer, so a staged restore is not possible."
+msgstr "На этом устройстве нет слоя /overlay/upper, поэтому восстановление с подменой слоя невозможно."

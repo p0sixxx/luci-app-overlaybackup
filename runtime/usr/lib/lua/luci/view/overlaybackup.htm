@@ -146,7 +146,12 @@
 <div class="obk-card">
     <h3><%:Restoring from an archive%></h3>
 
-<% if pending then %>
+<% if working then %>
+    <div class="obk-alert obk-alert-warning">
+        <div class="obk-alert-title obk-loading"><span class="obk-spinner"></span><%:Unpacking the archive%></div>
+        <div><%:This can take a few minutes for a large overlay. The page refreshes on its own, and the device reboots as soon as the archive is ready.%></div>
+    </div>
+<% elseif pending then %>
     <div class="obk-alert obk-alert-success">
         <div class="obk-alert-title"><%:A restore is prepared%></div>
         <div><%:The new layer is unpacked and waiting. It is put in place early during the next boot, before anything starts using the filesystem, and the device then reboots once more on its own.%></div>
@@ -175,7 +180,7 @@
             <input type="submit" class="cbi-button cbi-button-negative" value="<%:Restore and reboot%>" />
             <div id="restore-loading-message" class="obk-loading" style="display:none;">
                 <span class="obk-spinner"></span>
-                <span><%:Uploading and unpacking, please wait...%></span>
+                <span><%:Uploading, please wait...%></span>
             </div>
         </div>
     </form>
@@ -214,6 +219,11 @@ function confirmRestore() {
     }
     return showRestoreLoadingMessage();
 }
+
+<% if working then %>
+// Распаковка идёт в фоне - обновляем страницу, пока она не закончится.
+setTimeout(function () { window.location.reload(); }, 5000);
+<% end %>
 </script>
 
 <%+footer%>

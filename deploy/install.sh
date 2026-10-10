@@ -91,7 +91,12 @@ while IFS= read -r line; do
 
 	mkdir -p "$(dirname "$dst")"
 	cp "${RUNTIME_DIR}/${src}" "$dst"
-	chmod 0644 "$dst"
+	# Scripts keep their exec bit, everything else is plain data.
+	if [ -x "${RUNTIME_DIR}/${src}" ]; then
+		chmod 0755 "$dst"
+	else
+		chmod 0644 "$dst"
+	fi
 	echo "  install $dst"
 done < "$MANIFEST"
 
@@ -101,6 +106,26 @@ if [ -f /etc/init.d/overlaybackup-restore ]; then
 	chmod 0755 /etc/init.d/overlaybackup-restore
 	/etc/init.d/overlaybackup-restore enable 2>/dev/null || true
 	echo "  enable  /etc/init.d/overlaybackup-restore"
+fi
+
+# uhttpd kills any CGI request that runs longer than script_timeout seconds
+# in total - 60 by default. The timer is armed when the process starts and is
+# never extended by upload or download progress (uhttpd proc.c: set once in
+# uh_create_process, cancelled only in proc_free). Streaming a backup of a
+# large overlay, or uploading one for a restore, takes longer than that, and
+# uhttpd would cut it off halfway. The original value is remembered so that
+# uninstall.sh can put it back.
+MIN_TIMEOUT=1800
+if command -v uci >/dev/null 2>&1; then
+	CUR_TIMEOUT=$(uci -q get uhttpd.main.script_timeout || true)
+	if [ -z "$CUR_TIMEOUT" ] || [ "$CUR_TIMEOUT" -lt "$MIN_TIMEOUT" ] 2>/dev/null; then
+		if [ -z "$(uci -q get uhttpd.main.overlaybackup_orig_timeout || true)" ]; then
+			uci set uhttpd.main.overlaybackup_orig_timeout="${CUR_TIMEOUT:-60}"
+		fi
+		uci set uhttpd.main.script_timeout="$MIN_TIMEOUT"
+		uci commit uhttpd
+		echo "  uhttpd  script_timeout ${CUR_TIMEOUT:-60} -> $MIN_TIMEOUT (large backups need more than a minute)"
+	fi
 fi
 
 echo "Clearing the LuCI caches and restarting uhttpd..."

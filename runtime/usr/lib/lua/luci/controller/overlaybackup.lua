@@ -30,7 +30,13 @@ local UPLOAD     = STAGE_ROOT .. "/upload.tar.gz"
 local STAGING    = STAGE_ROOT .. "/staging"
 local PREVIOUS   = STAGE_ROOT .. "/previous"
 local PENDING    = STAGE_ROOT .. "/pending"
+local WORKING    = STAGE_ROOT .. "/working"
 local LOGFILE    = STAGE_ROOT .. "/restore.log"
+
+-- Фоновая распаковка. Внутри HTTP-запроса её делать нельзя: uhttpd убивает
+-- CGI-процесс, не выдавший ответа за script_timeout (по умолчанию 60 с),
+-- а большой архив распаковывается на роутере минутами.
+local STAGE_WORKER = "/usr/libexec/overlaybackup-stage"
 
 local UPPER = "/overlay/upper"
 
@@ -108,18 +114,13 @@ local function gnu_tar()
     return nil
 end
 
--- Ключи сохранения метаданных для GNU tar. Глоб обязательно в кавычках:
--- иначе его раскрыл бы шелл. --hard-dereference только при создании - он
+-- Ключи сохранения метаданных для GNU tar при создании архива. Глоб
+-- обязательно в кавычках: иначе его раскрыл бы шелл. --hard-dereference
 -- превращает хардлинки в обычные файлы, и живую систему для этого трогать
 -- не надо (прежние версии плагина ради этого правили файлы в overlay).
-local XATTR_BASE    = " --xattrs --xattrs-include='trusted.overlay.*' --numeric-owner"
-local XATTR_CREATE  = XATTR_BASE .. " --hard-dereference"
-local XATTR_EXTRACT = XATTR_BASE
-
--- os.execute возвращает код возврата в Lua 5.1 и true/false в 5.2+.
-local function succeeded(rc)
-    return rc == true or rc == 0
-end
+-- Распаковка с теми же ключами - в /usr/libexec/overlaybackup-stage.
+local XATTR_CREATE =
+    " --xattrs --xattrs-include='trusted.overlay.*' --numeric-owner --hard-dereference"
 
 -- Что архивируем. На большинстве устройств изменения лежат в /overlay/upper;
 -- если такой раскладки нет, забираем /overlay целиком.
@@ -139,15 +140,45 @@ function action_backup_page()
     local fs = require "nixio.fs"
     local tpl = require "luci.template"
 
+    -- Идёт ли фоновая распаковка. PID проверяем по /proc: если процесс
+    -- умер, не дойдя до конца (например, пропало питание), флаг working
+    -- остался бы навсегда, и страница бесконечно показывала бы распаковку.
+    local working = nil
+    if fs.access(WORKING) then
+        local pid = (fs.readfile(WORKING) or ""):match("%d+")
+        if pid and fs.access("/proc/" .. pid) then
+            working = true
+        else
+            os.remove(WORKING)
+            if not fs.access(PENDING) and not fs.access(LOGFILE) then
+                fs.writefile(LOGFILE, "CODE:worker_died\n")
+            end
+        end
+    end
+
     -- Результат прошлой попытки показываем один раз: прочитали - удалили,
     -- чтобы сообщение не висело при следующем открытии страницы.
     local message = nil
-    if fs.access(LOGFILE) then
-        message = fs.readfile(LOGFILE)
+    if not working and fs.access(LOGFILE) then
+        message = fs.readfile(LOGFILE) or ""
         os.remove(LOGFILE)
+
+        -- Фоновый скрипт пишет код причины, а не текст: переводить умеет
+        -- только LuCI. Остальные строки - вывод tar, его показываем как есть.
+        local code, rest = message:match("^CODE:([%w_]+)\n?(.*)$")
+        if code then
+            local texts = {
+                unpack_failed = i18n.translate("Unpacking the archive failed."),
+                no_etc        = i18n.translate("The archive does not look like an overlay backup: it has no etc directory. Nothing was changed."),
+                no_upload     = i18n.translate("The archive file was not received. Make sure you selected a file before pressing the button."),
+                worker_died   = i18n.translate("The unpacking process stopped before finishing. Nothing was changed."),
+            }
+            message = (texts[code] or code) .. (rest ~= "" and ("\n" .. rest) or "")
+        end
     end
 
     tpl.render("overlaybackup", {
+        working      = working,
         pending      = fs.access(PENDING) and (fs.readfile(PENDING) or "") or nil,
         previous     = fs.stat(PREVIOUS) and true or nil,
         has_gnu_tar  = gnu_tar() and true or false,
@@ -219,6 +250,16 @@ end
 function restore_backup()
     local fs = require "nixio.fs"
 
+    -- Пока идёт распаковка предыдущего архива, новую не начинаем: чистка
+    -- в начале удалила бы каталог, в который фоновый процесс сейчас пишет.
+    if fs.access(WORKING) then
+        local pid = (fs.readfile(WORKING) or ""):match("%d+")
+        if pid and fs.access("/proc/" .. pid) then
+            luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
+            return
+        end
+    end
+
     if not fs.stat(UPPER) then
         return fail(i18n.translate(
             "This device does not use an /overlay/upper layer, so a staged restore is not possible."))
@@ -227,7 +268,7 @@ function restore_backup()
     -- Прошлые следы убираем до приёма файла: система сейчас загружена
     -- нормально, и ничто из них не используется.
     os.execute("rm -rf " .. STAGING .. " " .. PREVIOUS .. " " .. UPLOAD ..
-               " " .. PENDING .. " >/dev/null 2>&1")
+               " " .. PENDING .. " " .. WORKING .. " " .. LOGFILE .. " >/dev/null 2>&1")
     os.execute("mkdir -p " .. STAGE_ROOT .. " >/dev/null 2>&1")
 
     -- Принимаем загружаемый файл потоково, сразу на диск. Пишем на
@@ -256,53 +297,12 @@ function restore_backup()
             "The archive file was not received. Make sure you selected a file before pressing the button."))
     end
 
-    if not succeeded(os.execute("tar -tzf " .. UPLOAD .. " >/dev/null 2>&1")) then
-        os.execute("rm -f " .. UPLOAD)
-        return fail(i18n.translate(
-            "The uploaded file is not a valid .tar.gz archive."))
-    end
-
-    local tar = gnu_tar()
-    local unpack_log = STAGE_ROOT .. "/unpack.log"
-    local cmd
-    if tar then
-        cmd = string.format("%s%s -xzf %s -C %s > %s 2>&1",
-            tar, XATTR_EXTRACT, UPLOAD, STAGING, unpack_log)
-    else
-        cmd = string.format("tar -xzf %s -C %s > %s 2>&1",
-            UPLOAD, STAGING, unpack_log)
-    end
-
-    os.execute("mkdir -p " .. STAGING)
-    -- Через os.execute, а не io.popen: в Lua 5.1 popen:close() код возврата
-    -- не отдаёт, и провал распаковки прошёл бы незамеченным.
-    local ok = succeeded(os.execute(cmd))
-    local output = fs.readfile(unpack_log) or ""
-    os.remove(unpack_log)
-
-    os.execute("rm -f " .. UPLOAD)
-
-    if not ok then
-        os.execute("rm -rf " .. STAGING)
-        return fail(i18n.translate("Unpacking the archive failed.") .. "\n" .. output)
-    end
-
-    -- Проверка вменяемости перед тем, как ставить подмену слоя в очередь.
-    -- Подсунутый архив не того содержания оставил бы устройство без etc,
-    -- то есть незагружаемым, а это чинится только сбросом к заводским.
-    if not fs.stat(STAGING .. "/etc") then
-        os.execute("rm -rf " .. STAGING)
-        return fail(i18n.translate(
-            "The archive does not look like an overlay backup: it has no etc directory. Nothing was changed."))
-    end
-
-    fs.writefile(PENDING, os.date("%Y-%m-%d %H:%M:%S") .. "\n")
-    os.execute("sync")
-
-    -- Скрипт сработает на следующей загрузке, пока системой ещё никто
-    -- не пользуется, подменит слой и сразу перезагрузится ещё раз.
-    os.execute("/etc/init.d/overlaybackup-restore enable >/dev/null 2>&1")
-    os.execute("(sleep 3 && reboot) >/dev/null 2>&1 &")
+    -- Распаковка, проверка и постановка подмены в очередь - в фоне, а этот
+    -- запрос сразу отвечает. stdin отвязываем: у CGI-процесса это тело
+    -- HTTP-запроса, и фоновый процесс не должен его унаследовать.
+    -- Через sh, а не напрямую: так запуску не мешает потерянный при
+    -- копировании бит исполнения.
+    os.execute("/bin/sh " .. STAGE_WORKER .. " </dev/null >/dev/null 2>&1 &")
 
     luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
 end

@@ -209,7 +209,15 @@ whiteout-записью — символьным устройством `0:0`, �
 tmpfs, то есть оперативная память, — overlay на сотни мегабайт туда просто не
 помещался, и `tar` обрывался на полпути.
 
-Обратная сторона: заголовок `Content-Length` выставить нельзя, размер заранее
+Поток упирается в другое ограничение — время. `uhttpd` убивает любой
+CGI-запрос, который длится дольше `script_timeout` секунд **в сумме**
+(по умолчанию 60): таймер взводится при запуске процесса и не продлевается
+ни отдачей данных, ни приёмом. Сжатие overlay на сотни мегабайт на процессоре
+роутера дольше минуты, и поток оборвался бы на середине. Поэтому
+`deploy/install.sh` поднимает `uhttpd.main.script_timeout` до 1800, запоминая
+прежнее значение, а `deploy/uninstall.sh` его возвращает.
+
+Обратная сторона потока: заголовок `Content-Length` выставить нельзя, размер заранее
 неизвестен. Если передача прервётся, файл окажется коротким, а серверной копии
 для проверки не останется — после скачивания стоит убедиться, что архив
 открывается.
@@ -226,12 +234,25 @@ tmpfs, то есть оперативная память, — overlay на со�
 
 **Шаг 1, из LuCI.** Загружаемый архив принимается потоково и пишется в
 `/overlay/.overlaybackup/upload.tar.gz` — на файловую систему overlay, а не
-в `/tmp`, по той же причине с памятью. Затем он проверяется (`tar -tzf`) и
-распаковывается в `/overlay/.overlaybackup/staging` — каталог **рядом** с
+в `/tmp`, по той же причине с памятью. На этом запрос и заканчивается.
+
+Распаковка внутри запроса невозможна по той же причине, что и выше: на
+большом архиве она занимает минуты, и `uhttpd` убил бы процесс посреди
+работы — в браузере это выглядит как `Bad Gateway: The process did not
+produce any response`. Поэтому распаковку делает отдельный фоновый процесс
+`/usr/libexec/overlaybackup-stage`, а страница показывает, что она идёт, и
+обновляется сама.
+
+Распаковка идёт в `/overlay/.overlaybackup/staging` — каталог **рядом** с
 `upper`, вне смонтированного объединения, так что живую систему это не трогает.
-Если в распакованном нет каталога `etc`, подмена отменяется: остаться без `etc`
-значит остаться без загрузки. После этого ставится флаг и устройство уходит
+Битый архив проваливает распаковку, и ничего не меняется. Если в распакованном
+нет каталога `etc`, подмена тоже отменяется: остаться без `etc` значит
+остаться без загрузки. После этого ставится флаг и устройство уходит
 в перезагрузку.
+
+Если фоновый процесс умрёт, не закончив (например, пропало питание), страница
+увидит это по отсутствию его PID в `/proc` и сообщит, а не будет крутить
+распаковку вечно.
 
 **Шаг 2, на загрузке.** Скрипт `/etc/init.d/overlaybackup-restore` со
 `START=01` видит флаг и выполняет подмену двумя `mv` в пределах одной файловой
@@ -264,6 +285,7 @@ sync && reboot -f
 ```
 runtime/                              раскладка файлов от корня ФС роутера
   etc/init.d/overlaybackup-restore   подмена слоя на загрузке
+  usr/libexec/overlaybackup-stage    фоновая распаковка архива
   usr/lib/lua/luci/controller/…lua    контроллер (маршруты и логика)
   usr/lib/lua/luci/view/…htm          шаблон страницы
   usr/lib/lua/luci/i18n/…ru.lmo       собранный русский каталог
@@ -498,7 +520,15 @@ forwards it to the HTTP response in 64 KiB blocks. The archive used to be built
 in `/tmp`, which is tmpfs - RAM - so an overlay of a few hundred megabytes
 simply did not fit and `tar` was cut off halfway.
 
-The trade-off: `Content-Length` cannot be set, because the size is not known in
+Streaming runs into a different limit instead - time. `uhttpd` kills any CGI
+request that lasts longer than `script_timeout` seconds **in total** (60 by
+default): the timer is armed when the process starts and is not extended by
+sending or receiving data. Compressing an overlay of a few hundred megabytes on
+a router CPU takes more than a minute, so the stream would be cut off halfway.
+That is why `deploy/install.sh` raises `uhttpd.main.script_timeout` to 1800,
+remembering the previous value, and `deploy/uninstall.sh` puts it back.
+
+The other trade-off of streaming: `Content-Length` cannot be set, because the size is not known in
 advance. If the transfer breaks the file ends up short, and there is no copy on
 the server left to check it against - so do confirm the downloaded archive
 opens.
@@ -515,11 +545,24 @@ It is now split in two.
 
 **Step 1, from LuCI.** The uploaded archive is streamed to
 `/overlay/.overlaybackup/upload.tar.gz` - onto the overlay filesystem rather
-than `/tmp`, for the same reason of memory. It is then validated (`tar -tzf`)
-and unpacked into `/overlay/.overlaybackup/staging`, a directory **next to**
-`upper` and outside the mounted union, so the live system is left alone. If the
-unpacked tree has no `etc` directory the swap is called off: a device without
-`etc` is a device that does not boot. A flag is then set and the device reboots.
+than `/tmp`, for the same reason of memory. That is where the request ends.
+
+Unpacking inside the request is impossible for the same reason as above: on a
+large archive it takes minutes, and `uhttpd` would kill the process partway
+through - which the browser shows as `Bad Gateway: The process did not produce
+any response`. So the unpacking is done by a separate background process,
+`/usr/libexec/overlaybackup-stage`, while the page shows that it is running and
+refreshes on its own.
+
+It unpacks into `/overlay/.overlaybackup/staging`, a directory **next to**
+`upper` and outside the mounted union, so the live system is left alone. A
+broken archive fails to unpack and nothing changes. If the unpacked tree has no
+`etc` directory the swap is called off too: a device without `etc` is a device
+that does not boot. A flag is then set and the device reboots.
+
+Should the background process die before finishing (a power cut, say), the page
+notices that its PID is gone from `/proc` and reports it rather than showing the
+unpacking forever.
 
 **Step 2, during boot.** `/etc/init.d/overlaybackup-restore` with `START=01`
 sees the flag and performs the swap with two renames within one filesystem: the
@@ -553,6 +596,7 @@ sync && reboot -f
 ```
 runtime/                              files laid out from the router's FS root
   etc/init.d/overlaybackup-restore   boot-time layer swap
+  usr/libexec/overlaybackup-stage    background archive unpacking
   usr/lib/lua/luci/controller/…lua    controller (routes and logic)
   usr/lib/lua/luci/view/…htm          page template
   usr/lib/lua/luci/i18n/…ru.lmo       compiled Russian catalog

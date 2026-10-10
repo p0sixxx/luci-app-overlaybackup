@@ -36,6 +36,12 @@ msgstr ""
 msgid "Restoring from an archive"
 msgstr ""
 
+msgid "Unpacking the archive"
+msgstr ""
+
+msgid "This can take a few minutes for a large overlay. The page refreshes on its own, and the device reboots as soon as the archive is ready."
+msgstr ""
+
 msgid "A restore is prepared"
 msgstr ""
 
@@ -57,7 +63,7 @@ msgstr ""
 msgid "Restore and reboot"
 msgstr ""
 
-msgid "Uploading and unpacking, please wait..."
+msgid "Uploading, please wait..."
 msgstr ""
 
 msgid "The overlay layer replaced by the last restore is kept at /overlay/.overlaybackup/previous as a way back. It is removed when the next restore is prepared."
@@ -69,17 +75,17 @@ msgstr ""
 msgid "The current overlay will be replaced by the contents of the archive, and the device will reboot twice to apply it. Continue?"
 msgstr ""
 
-msgid "This device does not use an /overlay/upper layer, so a staged restore is not possible."
+msgid "Unpacking the archive failed."
+msgstr ""
+
+msgid "The archive does not look like an overlay backup: it has no etc directory. Nothing was changed."
 msgstr ""
 
 msgid "The archive file was not received. Make sure you selected a file before pressing the button."
 msgstr ""
 
-msgid "The uploaded file is not a valid .tar.gz archive."
+msgid "The unpacking process stopped before finishing. Nothing was changed."
 msgstr ""
 
-msgid "Unpacking the archive failed."
-msgstr ""
-
-msgid "The archive does not look like an overlay backup: it has no etc directory. Nothing was changed."
+msgid "This device does not use an /overlay/upper layer, so a staged restore is not possible."
 msgstr ""
