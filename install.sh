@@ -1,20 +1,36 @@
 #!/bin/sh
 # luci-app-overlaybackup - install.sh
 #
-# Installs the packages the plugin depends on, copies the files listed in
-# deploy/MANIFEST onto a running OpenWrt router and reloads what is needed to
-# pick them up: LuCI's dispatch index cache and uhttpd, which keeps the
-# compiled Lua controller and page template in memory.
+# The one installer, for installing and for updating. Run ON the router,
+# as root, either straight from GitHub:
 #
-# Usage (run ON the router, as root):
-#   sh install.sh [--no-deps]
+#   wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/install.sh | sh
 #
-# --no-deps   do not touch the package manager; only check that the
-#             dependencies are present (for routers without internet access)
+# or from an unpacked copy of the project:
 #
-# Or in one go, straight from GitHub - see deploy/bootstrap.sh.
+#   sh install.sh
+#
+# Options (after "sh -s --" when piped):
+#
+#   --no-deps   do not touch the package manager, only check that the
+#               dependencies are present (for routers without internet)
+#
+# Read from a pipe, the script has no project files next to it: it then
+# downloads the main branch as an archive and runs the install.sh inside it.
+# From an unpacked copy it installs right away:
+#
+#   1. checks the dependencies and installs whatever is missing through apk
+#      (25.12 and newer) or opkg (up to 24.10);
+#   2. copies the files listed in MANIFEST and keeps a copy of MANIFEST and
+#      uninstall.sh in /usr/share/luci-app-overlaybackup for removal;
+#   3. enables the boot-time layer swap, raises uhttpd's script_timeout,
+#      drops the LuCI caches and restarts uhttpd.
 
 set -e
+
+REPO=p0sixxx/luci-app-overlaybackup
+BRANCH=main
+SHARE=/usr/share/luci-app-overlaybackup
 
 INSTALL_DEPS=1
 for arg in "$@"; do
@@ -23,19 +39,6 @@ for arg in "$@"; do
 		*) echo "Unknown option: $arg" >&2; exit 1 ;;
 	esac
 done
-
-# What the plugin needs on top of a stock image:
-#   luci-compat, luci-lua-runtime - the page is a Lua controller and template,
-#                                   and 25.12 ships LuCI without a Lua runtime
-#   luci-lib-nixio                - file system access from the controller
-#   tar                           - GNU tar: only it keeps the overlayfs markers
-#                                   (trusted.overlay.* xattrs); BusyBox tar
-#                                   silently drops them
-DEPS="luci-compat luci-lua-runtime luci-lib-nixio tar"
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-RUNTIME_DIR="$(cd "${SCRIPT_DIR}/../runtime" && pwd)"
-MANIFEST="${SCRIPT_DIR}/MANIFEST"
 
 echo "== luci-app-overlaybackup installer =="
 
@@ -48,6 +51,48 @@ if [ ! -f /etc/openwrt_release ]; then
 	echo "ERROR: /etc/openwrt_release not found - this does not look like an OpenWrt system." >&2
 	exit 1
 fi
+
+# ------------------------------------------------------------------
+# where the project files are
+# ------------------------------------------------------------------
+
+# Empty when the script is read from a pipe ($0 is then the shell itself).
+SELF_DIR=""
+case "$0" in
+	install.sh|*/install.sh)
+		[ -f "$0" ] && SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+		;;
+esac
+
+if [ -z "$SELF_DIR" ] || [ ! -f "$SELF_DIR/runtime/usr/lib/lua/luci/controller/overlaybackup.lua" ]; then
+	# Guard against a loop if the downloaded copy turns out incomplete.
+	if [ -n "$OVERLAYBACKUP_FETCHED" ]; then
+		echo "ERROR: the downloaded project is incomplete - no runtime/ next to install.sh." >&2
+		exit 1
+	fi
+
+	URL="https://github.com/$REPO/archive/refs/heads/$BRANCH.tar.gz"
+	WORK=/tmp/luci-app-overlaybackup-install
+	echo "Downloading $URL"
+
+	rm -rf /tmp/luci-app-overlaybackup-install
+	mkdir -p "$WORK"
+
+	if ! wget -q -O "$WORK/src.tar.gz" "$URL"; then
+		echo "ERROR: download failed - is the router online?" >&2
+		exit 1
+	fi
+	tar -xzf "$WORK/src.tar.gz" -C "$WORK"
+
+	# stdin is the pipe this script is being read from: keep the real
+	# installer off it, or anything reading stdin would eat the script.
+	export OVERLAYBACKUP_FETCHED=1
+	exec sh "$WORK/luci-app-overlaybackup-$BRANCH/install.sh" "$@" </dev/null
+fi
+
+RUNTIME_DIR="$SELF_DIR/runtime"
+MANIFEST="$SELF_DIR/MANIFEST"
+
 # shellcheck disable=SC1091
 . /etc/openwrt_release
 echo "Target system: ${DISTRIB_ID:-OpenWrt} ${DISTRIB_RELEASE:-unknown}"
@@ -60,6 +105,15 @@ fi
 # ------------------------------------------------------------------
 # dependencies - before anything else, since the checks below rely on them
 # ------------------------------------------------------------------
+
+# What the plugin needs on top of a stock image:
+#   luci-compat, luci-lua-runtime - the page is a Lua controller and template,
+#                                   and 24.10/25.12 ship LuCI without a Lua runtime
+#   luci-lib-nixio                - file system access from the controller
+#   tar                           - GNU tar: only it keeps the overlayfs markers
+#                                   (trusted.overlay.* xattrs); BusyBox tar
+#                                   silently drops them
+DEPS="luci-compat luci-lua-runtime luci-lib-nixio tar"
 
 # 25.12 and newer use apk, earlier releases opkg.
 if command -v apk >/dev/null 2>&1; then
@@ -135,9 +189,9 @@ fi
 
 # GNU tar is a soft requirement: everything works without it, but the
 # overlayfs markers are lost on backup and restore.
-GNU_TAR=0
 # The tar package installs GNU tar as /usr/libexec/tar-gnu and points /bin/tar
 # at it through alternatives, on 24.10 and 25.12 alike.
+GNU_TAR=0
 for candidate in /usr/libexec/tar-gnu /bin/tar /usr/bin/tar /usr/sbin/tar; do
 	[ -x "$candidate" ] || continue
 	if "$candidate" --version 2>/dev/null | grep -q 'GNU tar'; then
@@ -175,6 +229,8 @@ for candidate in lua lua5.1; do
 	command -v "$candidate" >/dev/null 2>&1 && { LUA_BIN="$candidate"; break; }
 done
 if [ -n "$LUA_BIN" ]; then
+	# The path goes inside the code: in Lua 5.1 the arg table only exists
+	# after -e has run, and a file named after -e would also be executed.
 	if ! "$LUA_BIN" -e "assert(loadfile('${RUNTIME_DIR}/usr/lib/lua/luci/controller/overlaybackup.lua'))" >/tmp/overlaybackup-lua-check.log 2>&1; then
 		echo "ERROR: the controller fails to parse - aborting before touching the live install:" >&2
 		cat /tmp/overlaybackup-lua-check.log >&2
@@ -187,13 +243,18 @@ else
 	echo "  skipped (no Lua interpreter on this system)"
 fi
 
-# Files of the earlier versions of this plugin. Left in place they would
-# show up as extra menu entries pointing at outdated pages.
+# ------------------------------------------------------------------
+# files
+# ------------------------------------------------------------------
+
+# Files of earlier versions of this plugin. Left in place, the old
+# controllers would show up as extra menu entries pointing at outdated pages.
 for stale in \
 	/usr/lib/lua/luci/controller/fullbackup.lua \
 	/usr/lib/lua/luci/controller/fullbackuprestore.lua \
 	/usr/lib/lua/luci/view/fullbackup.htm \
-	/usr/lib/lua/luci/view/fullbackuprestore.htm
+	/usr/lib/lua/luci/view/fullbackuprestore.htm \
+	/usr/libexec/overlaybackup-stage
 do
 	[ -f "$stale" ] || continue
 	rm -f "$stale"
@@ -220,13 +281,25 @@ while IFS= read -r line; do
 	echo "  install $dst"
 done < "$MANIFEST"
 
+# A record of what was installed, and the uninstaller next to it, so that
+# removal works offline and removes exactly these files.
+mkdir -p "$SHARE"
+cp "$MANIFEST" "$SHARE/MANIFEST"
+chmod 0644 "$SHARE/MANIFEST"
+cp "$SELF_DIR/uninstall.sh" "$SHARE/uninstall.sh"
+chmod 0755 "$SHARE/uninstall.sh"
+echo "  install $SHARE/MANIFEST, $SHARE/uninstall.sh"
+
 # The init script carries out the layer swap on the next boot; it exits
 # immediately when no restore is pending, so enabling it is harmless.
 if [ -f /etc/init.d/overlaybackup-restore ]; then
-	chmod 0755 /etc/init.d/overlaybackup-restore
 	/etc/init.d/overlaybackup-restore enable 2>/dev/null || true
 	echo "  enable  /etc/init.d/overlaybackup-restore"
 fi
+
+# ------------------------------------------------------------------
+# uhttpd
+# ------------------------------------------------------------------
 
 # uhttpd kills any CGI request that runs longer than script_timeout seconds
 # in total - 60 by default. The timer is armed when the process starts and is
@@ -269,3 +342,4 @@ echo
 echo "luci-app-overlaybackup installed successfully."
 echo "Open LuCI -> System -> Overlay backup and restore in your browser."
 echo "(If the menu entry is missing, log out and back in, or hard-refresh the page.)"
+echo "To remove it later: sh $SHARE/uninstall.sh"

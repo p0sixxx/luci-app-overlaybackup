@@ -58,6 +58,9 @@ msgstr "Отменить подготовленное восстановлени
 msgid "Upload a previously saved archive - its contents will replace the current overlay. The archive is unpacked next to the live layer, never into it, and the swap happens on the next boot. The device reboots twice: once to apply it, once to come up on the restored system."
 msgstr "Загрузите ранее сохранённый архив - его содержимое заменит текущий overlay. Архив распаковывается рядом с живым слоем, а не в него, и подмена происходит на следующей загрузке. Устройство перезагрузится дважды: один раз чтобы применить, второй - чтобы подняться на восстановленной системе."
 
+msgid "The archive must come from the same device model and the same OpenWrt version. This is checked before anything is changed. This device:"
+msgstr "Архив должен быть снят с той же модели устройства и той же версии OpenWrt. Это проверяется до каких-либо изменений. Этот роутер:"
+
 msgid "Choose file"
 msgstr "Выбрать файл"
 
@@ -75,6 +78,12 @@ msgstr "Сначала выберите файл резервной копии."
 
 msgid "The current overlay will be replaced by the contents of the archive, and the device will reboot twice to apply it. Continue?"
 msgstr "Текущий overlay будет заменён содержимым архива, и устройство перезагрузится дважды, чтобы это применить. Продолжить?"
+
+msgid "The archive was made on a different device model (%s), this device is %s. Nothing was changed."
+msgstr "Архив снят с другой модели устройства (%s), а этот роутер - %s. Ничего не изменено."
+
+msgid "The archive was made on OpenWrt %s, this device runs OpenWrt %s. Nothing was changed."
+msgstr "Архив снят с OpenWrt %s, а на этом роутере OpenWrt %s. Ничего не изменено."
 
 msgid "Unpacking the archive failed."
 msgstr "Распаковать архив не удалось."

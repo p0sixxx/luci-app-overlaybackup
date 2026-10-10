@@ -1,0 +1,200 @@
+#!/bin/sh
+#
+# luci-app-overlaybackup - helper for the LuCI page
+#
+#   overlaybackup meta    write /etc/overlaybackup.meta, the archive's
+#                         "passport": model and OpenWrt version of this
+#                         device. Called right before a backup is streamed,
+#                         so the file ends up inside the archive.
+#
+#   overlaybackup stage   unpack an uploaded archive in the background, check
+#                         that it belongs to this model and OpenWrt version,
+#                         and queue the layer swap for the next boot.
+#
+# Unpacking cannot happen inside the HTTP request: uhttpd kills any CGI
+# request that runs longer than script_timeout in total, and an overlay of a
+# few hundred megabytes takes minutes to unpack on a router CPU.
+#
+# The page follows "stage" through files in the work directory:
+#   working      - PID of this process while it runs
+#   pending      - unpacked and checked, the swap happens on the next boot
+#   restore.log  - why it failed: "CODE:<code>" on the first line (the page
+#                  translates it), details on the lines after it
+
+STAGE_ROOT=/overlay/.overlaybackup
+UPLOAD="$STAGE_ROOT/upload.tar.gz"
+STAGING="$STAGE_ROOT/staging"
+PENDING="$STAGE_ROOT/pending"
+WORKING="$STAGE_ROOT/working"
+LOGFILE="$STAGE_ROOT/restore.log"
+UNPACK_LOG="$STAGE_ROOT/unpack.log"
+
+META=/etc/overlaybackup.meta
+META_IN_ARCHIVE=etc/overlaybackup.meta
+
+# ------------------------------------------------------------------
+# identity of this device
+# ------------------------------------------------------------------
+
+# The same source OpenWrt itself uses (board_name in /lib/functions.sh):
+# written at preinit from the device tree, on 24.10 and 25.12 alike.
+this_board() {
+	if [ -s /tmp/sysinfo/board_name ]; then
+		cat /tmp/sysinfo/board_name
+	else
+		echo generic
+	fi
+}
+
+this_model() {
+	[ -s /tmp/sysinfo/model ] && cat /tmp/sysinfo/model
+}
+
+# One DISTRIB_* value from /etc/openwrt_release, read in a subshell so the
+# sourced variables do not leak into this script.
+this_release() {
+	( . /etc/openwrt_release 2>/dev/null; eval "echo \"\${DISTRIB_$1}\"" )
+}
+
+# key=value lookup in a metadata file
+meta_get() {
+	sed -n "s/^$2=//p" "$1" | head -n 1
+}
+
+# ------------------------------------------------------------------
+# overlaybackup meta
+# ------------------------------------------------------------------
+
+cmd_meta() {
+	{
+		echo "format=1"
+		echo "board=$(this_board)"
+		echo "model=$(this_model)"
+		echo "release=$(this_release RELEASE)"
+		echo "revision=$(this_release REVISION)"
+		echo "target=$(this_release TARGET)"
+		echo "created=$(date '+%Y-%m-%d %H:%M:%S')"
+	} > "$META.new" && mv "$META.new" "$META"
+}
+
+# ------------------------------------------------------------------
+# compatibility check
+# ------------------------------------------------------------------
+
+# $1 - directory the archive was unpacked into.
+# Returns 0 when the archive fits this device, or prints three lines -
+# the reason code, the archive's value, this device's value - and returns 1.
+#
+# The model comes from the archive's passport, or, for archives made before
+# the passport existed, from etc/board.json: OpenWrt generates it on first
+# boot (model.id is the same board name) and it lives in the overlay, so
+# every backup has it. The OpenWrt version is only in the passport; an
+# archive without one is checked for the model alone.
+check_compat() {
+	a_board=""
+	a_release=""
+
+	if [ -f "$1/$META_IN_ARCHIVE" ]; then
+		a_board=$(meta_get "$1/$META_IN_ARCHIVE" board)
+		a_release=$(meta_get "$1/$META_IN_ARCHIVE" release)
+	elif [ -f "$1/etc/board.json" ]; then
+		if command -v jsonfilter >/dev/null 2>&1; then
+			a_board=$(jsonfilter -i "$1/etc/board.json" -e '@.model.id' 2>/dev/null)
+		fi
+	fi
+
+	h_board=$(this_board)
+	h_release=$(this_release RELEASE)
+
+	if [ -n "$a_board" ] && [ "$a_board" != "$h_board" ]; then
+		printf '%s\n%s\n%s\n' board_mismatch "$a_board" "$h_board"
+		return 1
+	fi
+
+	if [ -n "$a_release" ] && [ "$a_release" != "$h_release" ]; then
+		printf '%s\n%s\n%s\n' release_mismatch "$a_release" "$h_release"
+		return 1
+	fi
+
+	return 0
+}
+
+# ------------------------------------------------------------------
+# overlaybackup stage
+# ------------------------------------------------------------------
+
+# $1 - reason code, $2 - optional details (several lines are fine)
+fail() {
+	{
+		echo "CODE:$1"
+		[ -n "$2" ] && printf '%s\n' "$2"
+	} > "$LOGFILE"
+	# Literal path, not "$STAGING": a recursive removal should never depend
+	# on a variable being set.
+	rm -rf /overlay/.overlaybackup/staging
+	rm -f "$UPLOAD" "$UNPACK_LOG" "$WORKING"
+	exit 1
+}
+
+cmd_stage() {
+	echo $$ > "$WORKING"
+
+	[ -f "$UPLOAD" ] || fail no_upload
+
+	# GNU tar is needed to carry the overlayfs markers (trusted.overlay.*
+	# xattrs); BusyBox tar silently drops them. The tar package installs it
+	# as /usr/libexec/tar-gnu and points /bin/tar at it via alternatives.
+	gnu_tar=""
+	for candidate in /usr/libexec/tar-gnu /bin/tar /usr/bin/tar /usr/sbin/tar; do
+		[ -x "$candidate" ] || continue
+		if "$candidate" --version 2>/dev/null | grep -q 'GNU tar'; then
+			gnu_tar="$candidate"
+			break
+		fi
+	done
+
+	mkdir -p "$STAGING"
+
+	if [ -n "$gnu_tar" ]; then
+		"$gnu_tar" --xattrs --xattrs-include='trusted.overlay.*' --numeric-owner \
+			-xzf "$UPLOAD" -C "$STAGING" > "$UNPACK_LOG" 2>&1 ||
+			fail unpack_failed "$(cat "$UNPACK_LOG" 2>/dev/null)"
+	else
+		tar -xzf "$UPLOAD" -C "$STAGING" > "$UNPACK_LOG" 2>&1 ||
+			fail unpack_failed "$(cat "$UNPACK_LOG" 2>/dev/null)"
+	fi
+
+	rm -f "$UPLOAD" "$UNPACK_LOG"
+
+	# Without etc the device does not boot - only a factory reset fixes that.
+	[ -d "$STAGING/etc" ] || fail no_etc
+
+	# Another model or another OpenWrt version: kernel modules, radio
+	# calibration and the package database would not match, and the device
+	# may not come up. Refuse before anything is queued.
+	if ! mismatch=$(check_compat "$STAGING"); then
+		fail "$(printf '%s\n' "$mismatch" | head -n 1)" \
+		     "$(printf '%s\n' "$mismatch" | tail -n +2)"
+	fi
+
+	date '+%Y-%m-%d %H:%M:%S' > "$PENDING"
+	sync
+
+	/etc/init.d/overlaybackup-restore enable 2>/dev/null
+
+	rm -f "$WORKING"
+
+	# A pause so that the page, which refreshes itself every few seconds,
+	# gets to show that the archive is ready before the device goes down.
+	sleep 5
+	reboot
+}
+
+case "$1" in
+	meta)  cmd_meta ;;
+	stage) cmd_stage ;;
+	*)
+		echo "usage: $0 meta|stage" >&2
+		exit 1
+		;;
+esac

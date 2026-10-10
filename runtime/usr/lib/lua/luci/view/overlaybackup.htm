@@ -167,6 +167,10 @@
     <p class="obk-card-desc">
     <%:Upload a previously saved archive - its contents will replace the current overlay. The archive is unpacked next to the live layer, never into it, and the swap happens on the next boot. The device reboots twice: once to apply it, once to come up on the restored system.%>
     </p>
+    <p class="obk-card-desc">
+    <%:The archive must come from the same device model and the same OpenWrt version. This is checked before anything is changed. This device:%>
+    <br /><code class="obk-file-name-code"><%=pcdata(device.model ~= "" and (device.model .. " - ") or "")%><%=pcdata(device.board)%>, OpenWrt <%=pcdata(device.release ~= "" and device.release or "?")%></code>
+    </p>
 
     <form method="post" action="<%=url('admin/system/overlaybackup/restore')%>" enctype="multipart/form-data"
           onsubmit="return confirmRestore()">

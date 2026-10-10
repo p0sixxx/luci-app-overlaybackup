@@ -1,12 +1,13 @@
 # luci-app-overlaybackup - deployment manifest
 #
 # One "<source relative to runtime/>  <destination absolute path>" pair per
-# line. install.sh / uninstall.sh parse this file so the file list only has
-# to be maintained in one place. Lines starting with # are comments, blank
-# lines are ignored.
+# line. install.sh copies these and keeps a copy of this file on the router
+# (/usr/share/luci-app-overlaybackup/MANIFEST), which uninstall.sh then uses
+# to remove exactly what was installed. Lines starting with # are comments,
+# blank lines are ignored.
 
 etc/init.d/overlaybackup-restore               /etc/init.d/overlaybackup-restore
-usr/libexec/overlaybackup-stage                /usr/libexec/overlaybackup-stage
+usr/libexec/overlaybackup                      /usr/libexec/overlaybackup
 usr/lib/lua/luci/controller/overlaybackup.lua   /usr/lib/lua/luci/controller/overlaybackup.lua
 usr/lib/lua/luci/view/overlaybackup.htm         /usr/lib/lua/luci/view/overlaybackup.htm
 usr/lib/lua/luci/i18n/overlaybackup.ru.lmo      /usr/lib/lua/luci/i18n/overlaybackup.ru.lmo

@@ -24,81 +24,66 @@
 * **Восстановление** из ранее сохранённого архива. Новый слой распаковывается
   рядом с живым, а подменяется на ранней загрузке — так, как это безопасно
   для overlayfs.
+* **Проверка модели и версии**: архив с другого устройства или другой версии
+  OpenWrt не будет восстановлен — это проверяется до каких-либо изменений.
 * **Откат**: слой, заменённый прошлым восстановлением, сохраняется.
 * Ошибки показываются на странице вместе с выводом `tar`.
+* Установка, обновление и удаление — одной командой, на 24.10 и 25.12.
 
 ## Установка
 
 ### Вариант 1: одной командой с GitHub
 
-На роутере:
+Установка и обновление — на роутере:
 
 ```sh
-wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/deploy/bootstrap.sh | sh
+wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/install.sh | sh
+```
+
+Удаление:
+
+```sh
+sh /usr/share/luci-app-overlaybackup/uninstall.sh
 ```
 
 Больше ничего не нужно — ни `git`, ни компьютера посередине, ни ручной
-установки пакетов. `bootstrap.sh` скачивает ветку `main` архивом и запускает
-`deploy/install.sh`, а тот:
+установки пакетов. `install.sh` один и тот же для всех случаев: прочитанный
+из конвейера, он сам скачивает ветку `main` архивом и запускается уже из неё,
+а затем:
 
 1. проверяет зависимости (`luci-compat`, `luci-lua-runtime`, `luci-lib-nixio`,
-   `tar`) и доставляет недостающие через `apk` (или `opkg` на выпусках до 24.10).
+   `tar`) и доставляет недостающие через `apk` на 25.12 или `opkg` на 24.10.
    Если всё уже стоит, в сеть он не обращается вовсе;
-2. раскладывает файлы плагина и включает init-скрипт подмены слоя;
-3. поднимает `script_timeout` у `uhttpd`, сбрасывает кэши LuCI и
-   перезапускает `uhttpd`.
+2. раскладывает файлы по путям из `MANIFEST` и оставляет на роутере, в
+   `/usr/share/luci-app-overlaybackup/`, копию манифеста и `uninstall.sh` —
+   поэтому удаление работает и без интернета, и после перезагрузки, и
+   убирает ровно то, что было поставлено;
+3. включает init-скрипт подмены слоя, поднимает `script_timeout` у `uhttpd`,
+   сбрасывает кэши LuCI и перезапускает `uhttpd`.
 
-Обновление — та же команда.
+`uninstall.sh` тоже можно запустить прямо с GitHub, файлы проекта ему не
+нужны: `wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/uninstall.sh | sh`. Он оставляет на месте
+`/overlay/.overlaybackup/previous` — слой, заменённый последним
+восстановлением, — потому что это ваши данные; убрать и его: `--purge`.
+Пакеты-зависимости тоже остаются: ими могут пользоваться другие программы.
 
-Для роутера без интернета: зависимости поставьте заранее, а установщику
-передайте `--no-deps` — тогда он только проверит, что пакеты на месте:
+Ключи передаются после `sh -s --`. Для роутера без интернета поставьте
+зависимости заранее и запустите с `--no-deps` — тогда установщик только
+проверит, что пакеты на месте:
 
 ```sh
-wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/deploy/bootstrap.sh | sh -s -- --no-deps
+wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/install.sh | sh -s -- --no-deps
 ```
-
-Если `wget` ругается на HTTPS — в образе нет SSL-библиотеки для
-`uclient-fetch`: `apk add libustream-mbedtls` и повторить.
-
-Удаление: `sh /tmp/luci-app-overlaybackup-install/luci-app-overlaybackup-main/deploy/uninstall.sh`.
-`/tmp` очищается при перезагрузке, так что после неё сначала повторите
-установку — она скачает проект заново.
 
 #### С компьютера через scp
 
 ```sh
 scp -O -r luci-app-overlaybackup root@<IP роутера>:/tmp/
-ssh root@<IP роутера> 'sh /tmp/luci-app-overlaybackup/deploy/install.sh'
+ssh root@<IP роутера> 'sh /tmp/luci-app-overlaybackup/install.sh'
 ```
 
 `-O` обязателен: современный OpenSSH по умолчанию копирует через SFTP, а в
 OpenWrt `sftp-server` нет — без ключа получите `sftp-server: not found`.
-
-`deploy/install.sh` разложит файлы по путям из `deploy/MANIFEST`, удалит
-файлы прежних версий плагина, сбросит кэш LuCI и перезапустит `uhttpd`.
-Удаление — `sh deploy/uninstall.sh`. Если файлы переносятся вручную,
-перечитать их заставит `sh deploy/restart.sh`.
-
-Всё содержимое `runtime/` повторяет раскладку файловой системы роутера,
-поэтому при желании можно скопировать файлы и поштучно:
-
-```sh
-scp -O runtime/etc/init.d/overlaybackup-restore             root@<IP роутера>:/etc/init.d/overlaybackup-restore
-scp -O runtime/usr/lib/lua/luci/controller/overlaybackup.lua root@<IP роутера>:/usr/lib/lua/luci/controller/overlaybackup.lua
-scp -O runtime/usr/lib/lua/luci/view/overlaybackup.htm       root@<IP роутера>:/usr/lib/lua/luci/view/overlaybackup.htm
-scp -O runtime/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo    root@<IP роутера>:/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo
-```
-
-После поштучного копирования init-скрипт нужно сделать исполняемым и
-включить — без него подготовленное восстановление никогда не применится:
-
-```sh
-chmod 0755 /etc/init.d/overlaybackup-restore
-/etc/init.d/overlaybackup-restore enable
-rm -f /tmp/luci-indexcache*
-rm -rf /tmp/luci-modulecache
-/etc/init.d/uhttpd restart
-```
 
 ### Вариант 2: сборка пакета `.apk` в OpenWrt SDK
 
@@ -180,7 +165,7 @@ apk update && apk add luci-compat luci-lua-runtime luci-lib-nixio
 opkg update && opkg install luci-compat luci-lua-runtime luci-lib-nixio
 ```
 
-`deploy/install.sh` ставит их сам; при установке пакетом они тоже
+`install.sh` ставит их сам; при установке пакетом они тоже
 подтягиваются сами. Команды выше нужны только для `--no-deps`.
 
 ## Как это устроено
@@ -231,8 +216,8 @@ CGI-запрос, который длится дольше `script_timeout` се
 (по умолчанию 60): таймер взводится при запуске процесса и не продлевается
 ни отдачей данных, ни приёмом. Сжатие overlay на сотни мегабайт на процессоре
 роутера дольше минуты, и поток оборвался бы на середине. Поэтому
-`deploy/install.sh` поднимает `uhttpd.main.script_timeout` до 1800, запоминая
-прежнее значение, а `deploy/uninstall.sh` его возвращает.
+`install.sh` поднимает `uhttpd.main.script_timeout` до 1800, запоминая
+прежнее значение, а `uninstall.sh` его возвращает.
 
 Обратная сторона потока: заголовок `Content-Length` выставить нельзя, размер заранее
 неизвестен. Если передача прервётся, файл окажется коротким, а серверной копии
@@ -257,7 +242,7 @@ CGI-запрос, который длится дольше `script_timeout` се
 большом архиве она занимает минуты, и `uhttpd` убил бы процесс посреди
 работы — в браузере это выглядит как `Bad Gateway: The process did not
 produce any response`. Поэтому распаковку делает отдельный фоновый процесс
-`/usr/libexec/overlaybackup-stage`, а страница показывает, что она идёт, и
+`/usr/libexec/overlaybackup stage`, а страница показывает, что она идёт, и
 обновляется сама.
 
 Распаковка идёт в `/overlay/.overlaybackup/staging` — каталог **рядом** с
@@ -284,6 +269,34 @@ produce any response`. Поэтому распаковку делает отде
 Итого устройство перезагружается дважды: первый раз — чтобы применить,
 второй — чтобы подняться на восстановленной системе.
 
+### Проверка модели и версии
+
+Архив можно восстановить только на ту же модель устройства и ту же версию
+OpenWrt, на которых он снят: внутри — модули ядра, конфигурация радио и база
+пакетов конкретного выпуска и устройства. Не совпадёт — устройство может не
+загрузиться. Поэтому это проверяется, причём до того, как что-либо изменено.
+
+**Паспорт архива.** Перед каждым бэкапом плагин пишет `/etc/overlaybackup.meta`:
+имя платы, модель, версию, ревизию и цель сборки. Файл пишется обычным путём,
+через объединённый корень, и потому попадает в архив вместе с остальным overlay.
+Имя платы берётся оттуда же, откуда его берёт сама OpenWrt (`board_name` в
+`/lib/functions.sh`): из `/tmp/sysinfo/board_name`, который заполняется при
+ранней загрузке из device tree — одинаково в 24.10 и 25.12.
+
+**Сверка.** После распаковки, перед постановкой подмены в очередь, паспорт из
+архива сверяется с этим устройством: сначала имя платы, затем версия OpenWrt.
+Не совпало — распакованное удаляется, на странице сообщение с обоими
+значениями, ничего не изменено.
+
+Архивы, снятые прежними версиями плагина, паспорта не имеют. Для них модель
+сверяется по `etc/board.json`: OpenWrt создаёт его на первой загрузке
+(`model.id` — то же имя платы), он лежит в overlay и поэтому есть в любом
+бэкапе. Версию у таких архивов проверить не по чему — следите за ней сами,
+она есть в имени файла.
+
+Какой архив подходит этому роутеру, видно прямо на странице — в карточке
+восстановления указаны модель, имя платы и версия.
+
 ### Откат
 
 `/overlay/.overlaybackup/previous` — это слой, который был заменён. Он
@@ -302,14 +315,13 @@ sync && reboot -f
 ```
 runtime/                              раскладка файлов от корня ФС роутера
   etc/init.d/overlaybackup-restore   подмена слоя на загрузке
-  usr/libexec/overlaybackup-stage    фоновая распаковка архива
+  usr/libexec/overlaybackup          паспорт архива и фоновая распаковка
   usr/lib/lua/luci/controller/…lua    контроллер (маршруты и логика)
   usr/lib/lua/luci/view/…htm          шаблон страницы
   usr/lib/lua/luci/i18n/…ru.lmo       собранный русский каталог
-deploy/MANIFEST                       список файлов и путей установки
-deploy/bootstrap.sh                   установка одной командой с GitHub
-deploy/install.sh, uninstall.sh       установка и удаление, запускать на роутере
-deploy/restart.sh                     перечитать файлы после ручного копирования
+install.sh                            установка и обновление, в том числе с GitHub
+uninstall.sh                          удаление, в том числе с GitHub
+MANIFEST                              список файлов и путей установки
 po/                                   исходники переводов и инструменты к ним
 Makefile                              необязательная сборка ipk для OpenWrt
 ```
@@ -317,9 +329,11 @@ Makefile                              необязательная сборка 
 ## Предупреждение
 
 Восстановление перезаписывает текущее содержимое overlay и перезагружает
-устройство. Если архив снят с другого устройства или с другой версии
-прошивки, роутер может не загрузиться — в этом случае поможет только сброс
-к заводским настройкам (failsafe / reset).
+устройство. Архив с другой модели или другой версии OpenWrt плагин не примет,
+но саму подмену слоя на загрузке на каждом устройстве стоит впервые делать,
+зная, как войти в failsafe: если восстановленная система не поднимется,
+откат делается оттуда (см. «Откат»), а в крайнем случае — сбросом к
+заводским настройкам.
 
 ## Лицензия
 
@@ -353,81 +367,66 @@ Tested on Netis NX30 v2 / GL.iNet Flint 2 running vanilla OpenWrt 25.12.5.
   written to the router, so the size of the overlay is not limited by free RAM.
 * **Restore** from a previously saved archive. The new layer is unpacked next
   to the live one and swapped in early during boot - the way overlayfs allows.
+* **Model and version check**: an archive from another device or another
+  OpenWrt version will not be restored - this is checked before anything
+  changes.
 * **Rollback**: the layer replaced by the last restore is kept.
 * Failures are reported on the page along with the `tar` output.
+* Install, update and removal - one command each, on 24.10 and 25.12.
 
 ## Installation
 
 ### Option 1: one command from GitHub
 
-On the router:
+Installing and updating - on the router:
 
 ```sh
-wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/deploy/bootstrap.sh | sh
+wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/install.sh | sh
+```
+
+Removing:
+
+```sh
+sh /usr/share/luci-app-overlaybackup/uninstall.sh
 ```
 
 That is all - no `git`, no computer in between, no installing packages by hand.
-`bootstrap.sh` downloads the `main` branch as an archive and runs
-`deploy/install.sh`, which:
+`install.sh` is the same script for every case: read from a pipe, it downloads
+the `main` branch as an archive and runs itself from there, and then:
 
 1. checks the dependencies (`luci-compat`, `luci-lua-runtime`, `luci-lib-nixio`,
-   `tar`) and installs whatever is missing through `apk` (or `opkg` on releases
-   up to 24.10). If everything is already there, it does not go online at all;
-2. lays out the plugin files and enables the layer-swap init script;
-3. raises `uhttpd`'s `script_timeout`, drops the LuCI caches and restarts
-   `uhttpd`.
+   `tar`) and installs whatever is missing through `apk` on 25.12 or `opkg` on
+   24.10. If everything is already there, it does not go online at all;
+2. lays out the files along the paths in `MANIFEST` and leaves a copy of the
+   manifest and `uninstall.sh` on the router in
+   `/usr/share/luci-app-overlaybackup/` - so removal works offline and after a
+   reboot, and removes exactly what was installed;
+3. enables the layer-swap init script, raises `uhttpd`'s `script_timeout`,
+   drops the LuCI caches and restarts `uhttpd`.
 
-Updating is the same command.
+`uninstall.sh` can also be run straight from GitHub, it needs no project files:
+`wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/uninstall.sh | sh`. It leaves
+`/overlay/.overlaybackup/previous` alone - the layer replaced by the last
+restore - because that is your data; `--purge` removes it as well. The
+dependency packages stay installed too: other software may use them.
 
-For a router without internet access, install the dependencies beforehand and
-pass `--no-deps` to the installer - it then only checks the packages are there:
+Options go after `sh -s --`. For a router without internet access, install the
+dependencies beforehand and run with `--no-deps` - the installer then only
+checks the packages are there:
 
 ```sh
-wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/deploy/bootstrap.sh | sh -s -- --no-deps
+wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/install.sh | sh -s -- --no-deps
 ```
-
-If `wget` complains about HTTPS, the image lacks the SSL library for
-`uclient-fetch`: `apk add libustream-mbedtls` and try again.
-
-Removal: `sh /tmp/luci-app-overlaybackup-install/luci-app-overlaybackup-main/deploy/uninstall.sh`.
-`/tmp` is wiped on reboot, so after one, run the install again first - it
-downloads the project anew.
 
 #### From a computer over scp
 
 ```sh
 scp -O -r luci-app-overlaybackup root@<router IP>:/tmp/
-ssh root@<router IP> 'sh /tmp/luci-app-overlaybackup/deploy/install.sh'
+ssh root@<router IP> 'sh /tmp/luci-app-overlaybackup/install.sh'
 ```
 
 `-O` is required: modern OpenSSH copies over SFTP by default, and OpenWrt ships
 no `sftp-server` - without the flag you get `sftp-server: not found`.
-
-`deploy/install.sh` lays the files out along the paths in `deploy/MANIFEST`,
-removes the files of earlier versions of the plugin, drops the LuCI cache and
-restarts `uhttpd`. To remove it, use `sh deploy/uninstall.sh`; after copying
-files by hand, `sh deploy/restart.sh` makes LuCI pick them up.
-
-Everything under `runtime/` mirrors the router's filesystem layout, so the
-files can just as well be copied one by one:
-
-```sh
-scp -O runtime/etc/init.d/overlaybackup-restore             root@<router IP>:/etc/init.d/overlaybackup-restore
-scp -O runtime/usr/lib/lua/luci/controller/overlaybackup.lua root@<router IP>:/usr/lib/lua/luci/controller/overlaybackup.lua
-scp -O runtime/usr/lib/lua/luci/view/overlaybackup.htm       root@<router IP>:/usr/lib/lua/luci/view/overlaybackup.htm
-scp -O runtime/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo    root@<router IP>:/usr/lib/lua/luci/i18n/overlaybackup.ru.lmo
-```
-
-After copying file by file, the init script has to be made executable and
-enabled - without it a prepared restore is never applied:
-
-```sh
-chmod 0755 /etc/init.d/overlaybackup-restore
-/etc/init.d/overlaybackup-restore enable
-rm -f /tmp/luci-indexcache*
-rm -rf /tmp/luci-modulecache
-/etc/init.d/uhttpd restart
-```
 
 ### Option 2: building an `.apk` package with the OpenWrt SDK
 
@@ -509,7 +508,7 @@ On releases up to and including 24.10:
 opkg update && opkg install luci-compat luci-lua-runtime luci-lib-nixio
 ```
 
-`deploy/install.sh` installs them itself, and installing the package pulls them
+`install.sh` installs them itself, and installing the package pulls them
 in too. The commands above are only needed with `--no-deps`.
 
 ## How it works
@@ -560,8 +559,8 @@ request that lasts longer than `script_timeout` seconds **in total** (60 by
 default): the timer is armed when the process starts and is not extended by
 sending or receiving data. Compressing an overlay of a few hundred megabytes on
 a router CPU takes more than a minute, so the stream would be cut off halfway.
-That is why `deploy/install.sh` raises `uhttpd.main.script_timeout` to 1800,
-remembering the previous value, and `deploy/uninstall.sh` puts it back.
+That is why `install.sh` raises `uhttpd.main.script_timeout` to 1800,
+remembering the previous value, and `uninstall.sh` puts it back.
 
 The other trade-off of streaming: `Content-Length` cannot be set, because the size is not known in
 advance. If the transfer breaks the file ends up short, and there is no copy on
@@ -586,7 +585,7 @@ Unpacking inside the request is impossible for the same reason as above: on a
 large archive it takes minutes, and `uhttpd` would kill the process partway
 through - which the browser shows as `Bad Gateway: The process did not produce
 any response`. So the unpacking is done by a separate background process,
-`/usr/libexec/overlaybackup-stage`, while the page shows that it is running and
+`/usr/libexec/overlaybackup stage`, while the page shows that it is running and
 refreshes on its own.
 
 It unpacks into `/overlay/.overlaybackup/staging`, a directory **next to**
@@ -613,6 +612,35 @@ loop.
 All in all the device reboots twice: once to apply the restore, once to come up
 on the restored system.
 
+### Model and version check
+
+An archive can only be restored onto the same device model and the same OpenWrt
+version it was taken from: it holds kernel modules, radio configuration and the
+package database of one particular release and device. A mismatch may leave the
+device unable to boot. So this is checked, and before anything is changed.
+
+**The archive passport.** Before every backup the plugin writes
+`/etc/overlaybackup.meta`: board name, model, version, revision and build
+target. It is written the ordinary way, through the merged root, so it ends up
+in the archive along with the rest of the overlay. The board name comes from
+where OpenWrt itself takes it (`board_name` in `/lib/functions.sh`):
+`/tmp/sysinfo/board_name`, filled in from the device tree early during boot -
+the same on 24.10 and 25.12.
+
+**The check.** After unpacking, before the swap is queued, the passport from
+the archive is compared with this device: the board name first, then the
+OpenWrt version. On a mismatch the unpacked tree is deleted, the page reports
+both values, and nothing is changed.
+
+Archives taken by earlier versions of the plugin have no passport. For those the
+model is checked against `etc/board.json`: OpenWrt generates it on first boot
+(`model.id` is the same board name), it lives in the overlay and so is in every
+backup. Their version cannot be checked against anything - keep an eye on it
+yourself, it is in the file name.
+
+Which archive fits this router is shown right on the page: the restore card
+lists its model, board name and version.
+
 ### Rolling back
 
 `/overlay/.overlaybackup/previous` is the layer that was replaced. It is removed
@@ -631,24 +659,25 @@ sync && reboot -f
 ```
 runtime/                              files laid out from the router's FS root
   etc/init.d/overlaybackup-restore   boot-time layer swap
-  usr/libexec/overlaybackup-stage    background archive unpacking
+  usr/libexec/overlaybackup          archive passport and background unpacking
   usr/lib/lua/luci/controller/…lua    controller (routes and logic)
   usr/lib/lua/luci/view/…htm          page template
   usr/lib/lua/luci/i18n/…ru.lmo       compiled Russian catalog
-deploy/MANIFEST                       file list and install paths
-deploy/bootstrap.sh                   one-command install from GitHub
-deploy/install.sh, uninstall.sh       install and removal, run on the router
-deploy/restart.sh                     reload after copying files by hand
+install.sh                            install and update, GitHub included
+uninstall.sh                          removal, GitHub included
+MANIFEST                              file list and install paths
 po/                                   translation sources and their tooling
 Makefile                              optional ipk build for OpenWrt
 ```
 
 ## Warning
 
-Restoring overwrites the current overlay content and reboots the device. If the
-archive was taken from a different device or a different firmware version, the
-router may fail to boot — the only way out then is a factory reset
-(failsafe / reset).
+Restoring overwrites the current overlay content and reboots the device. The
+plugin will not accept an archive from another model or another OpenWrt
+version, but the first boot-time layer swap on each device is worth doing
+knowing how to get into failsafe: should the restored system not come up, roll
+back from there (see "Rolling back"), or, as a last resort, reset to factory
+defaults.
 
 ## License
 

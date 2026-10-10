@@ -57,6 +57,9 @@ msgstr ""
 msgid "Upload a previously saved archive - its contents will replace the current overlay. The archive is unpacked next to the live layer, never into it, and the swap happens on the next boot. The device reboots twice: once to apply it, once to come up on the restored system."
 msgstr ""
 
+msgid "The archive must come from the same device model and the same OpenWrt version. This is checked before anything is changed. This device:"
+msgstr ""
+
 msgid "Choose file"
 msgstr ""
 
@@ -73,6 +76,12 @@ msgid "Select a backup file first."
 msgstr ""
 
 msgid "The current overlay will be replaced by the contents of the archive, and the device will reboot twice to apply it. Continue?"
+msgstr ""
+
+msgid "The archive was made on a different device model (%s), this device is %s. Nothing was changed."
+msgstr ""
+
+msgid "The archive was made on OpenWrt %s, this device runs OpenWrt %s. Nothing was changed."
 msgstr ""
 
 msgid "Unpacking the archive failed."

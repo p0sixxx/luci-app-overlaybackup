@@ -33,10 +33,11 @@ local PENDING    = STAGE_ROOT .. "/pending"
 local WORKING    = STAGE_ROOT .. "/working"
 local LOGFILE    = STAGE_ROOT .. "/restore.log"
 
--- Фоновая распаковка. Внутри HTTP-запроса её делать нельзя: uhttpd убивает
--- CGI-процесс, не выдавший ответа за script_timeout (по умолчанию 60 с),
--- а большой архив распаковывается на роутере минутами.
-local STAGE_WORKER = "/usr/libexec/overlaybackup-stage"
+-- Вспомогательный скрипт: "meta" пишет паспорт архива перед бэкапом,
+-- "stage" распаковывает загруженный архив в фоне. Внутри HTTP-запроса
+-- распаковку делать нельзя: uhttpd убивает CGI-запрос, длящийся дольше
+-- script_timeout, а большой архив распаковывается на роутере минутами.
+local HELPER = "/usr/libexec/overlaybackup"
 
 local UPPER = "/overlay/upper"
 
@@ -88,6 +89,24 @@ local function backup_filename()
         hostname, release, os.date("%Y-%m-%d"))
 end
 
+-- Чем этот роутер себя считает - то же, что пишется в паспорт архива и с
+-- чем сверяется загружаемый архив. Показываем на странице, чтобы было
+-- видно, какой архив сюда подходит.
+local function device_identity()
+    local fs = require "nixio.fs"
+    local function first_line(path)
+        return ((fs.readfile(path) or ""):match("^[^\n]*") or "")
+    end
+    local release = (fs.readfile("/etc/openwrt_release") or "")
+        :match("DISTRIB_RELEASE=[\"\']?([^\"\'\n]+)") or ""
+    local board = first_line("/tmp/sysinfo/board_name")
+    return {
+        board   = board ~= "" and board or "generic",
+        model   = first_line("/tmp/sysinfo/model"),
+        release = release,
+    }
+end
+
 -- Путь к GNU tar или nil, если его нет.
 --
 -- Это не придирка к вкусу: метки overlayfs живут в расширенных атрибутах
@@ -121,7 +140,7 @@ end
 -- обязательно в кавычках: иначе его раскрыл бы шелл. --hard-dereference
 -- превращает хардлинки в обычные файлы, и живую систему для этого трогать
 -- не надо (прежние версии плагина ради этого правили файлы в overlay).
--- Распаковка с теми же ключами - в /usr/libexec/overlaybackup-stage.
+-- Распаковка с теми же ключами - в /usr/libexec/overlaybackup (stage).
 local XATTR_CREATE =
     " --xattrs --xattrs-include='trusted.overlay.*' --numeric-owner --hard-dereference"
 
@@ -170,17 +189,30 @@ function action_backup_page()
         -- только LuCI. Остальные строки - вывод tar, его показываем как есть.
         local code, rest = message:match("^CODE:([%w_]+)\n?(.*)$")
         if code then
+            -- Для отказов по совместимости в следующих двух строках лежат
+            -- значение из архива и значение этого устройства.
+            local a, h = rest:match("^([^\n]*)\n([^\n]*)")
+            a, h = a or "?", h or "?"
             local texts = {
+                board_mismatch = i18n.translatef(
+                    "The archive was made on a different device model (%s), this device is %s. Nothing was changed.", a, h),
+                release_mismatch = i18n.translatef(
+                    "The archive was made on OpenWrt %s, this device runs OpenWrt %s. Nothing was changed.", a, h),
                 unpack_failed = i18n.translate("Unpacking the archive failed."),
                 no_etc        = i18n.translate("The archive does not look like an overlay backup: it has no etc directory. Nothing was changed."),
                 no_upload     = i18n.translate("The archive file was not received. Make sure you selected a file before pressing the button."),
                 worker_died   = i18n.translate("The unpacking process stopped before finishing. Nothing was changed."),
             }
+            if code == "board_mismatch" or code == "release_mismatch" then
+                -- значения уже вошли в текст, отдельно их не дублируем
+                rest = ""
+            end
             message = (texts[code] or code) .. (rest ~= "" and ("\n" .. rest) or "")
         end
     end
 
     tpl.render("overlaybackup", {
+        device       = device_identity(),
         working      = working,
         pending      = fs.access(PENDING) and (fs.readfile(PENDING) or "") or nil,
         previous     = fs.stat(PREVIOUS) and true or nil,
@@ -218,6 +250,12 @@ function download_backup()
         end
         cmd = string.format("tar%s -czf - -C %s . 2>/dev/null", exclude, dir)
     end
+
+    -- Паспорт архива: модель и версия OpenWrt этого устройства. Пишется в
+    -- /etc обычным путём, через объединённый корень, и потому попадает в
+    -- архив вместе с остальным overlay. При восстановлении по нему
+    -- проверяется, что архив подходит устройству.
+    os.execute("/bin/sh " .. HELPER .. " meta >/dev/null 2>&1")
 
     luci.http.header('Content-Disposition',
         'attachment; filename="' .. backup_filename() .. '"')
@@ -305,7 +343,7 @@ function restore_backup()
     -- HTTP-запроса, и фоновый процесс не должен его унаследовать.
     -- Через sh, а не напрямую: так запуску не мешает потерянный при
     -- копировании бит исполнения.
-    os.execute("/bin/sh " .. STAGE_WORKER .. " </dev/null >/dev/null 2>&1 &")
+    os.execute("/bin/sh " .. HELPER .. " stage </dev/null >/dev/null 2>&1 &")
 
     luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
 end

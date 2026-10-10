@@ -13,8 +13,8 @@ Strings come from two places:
 
         <%:some text%>
 
-  * the Lua controller, both the menu titles passed to _() and the one
-    message it writes out itself through i18n.translate().
+  * the Lua controller: the menu titles passed to _() and the messages it
+    produces itself through i18n.translate() and i18n.translatef().
 
 Both are resolved server-side against the same .lmo catalog, so a msgid
 has to match the source string byte for byte. This script refuses to
@@ -36,7 +36,7 @@ OUTPUT = os.path.join(HERE, 'templates/overlaybackup.pot')
 
 RE_TEMPLATE = re.compile(r'<%:(.*?)%>', re.S)
 RE_LUA_UNDERSCORE = re.compile(r'(?<![A-Za-z0-9_])_\(\s*"((?:[^"\\]|\\.)*)"\s*\)')
-RE_LUA_TRANSLATE = re.compile(r'i18n\.translate\(\s*"((?:[^"\\]|\\.)*)"')
+RE_LUA_TRANSLATE = re.compile(r'i18n\.translatef?\(\s*"((?:[^"\\]|\\.)*)"')
 
 HEADER = '''msgid ""
 msgstr ""

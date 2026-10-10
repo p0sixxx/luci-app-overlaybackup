@@ -44,7 +44,9 @@ start() {
 
 	if [ ! -d "$STAGING/etc" ]; then
 		log "staging directory has no etc, refusing to swap"
-		rm -rf "$STAGING"
+		# Literal paths for recursive removals: they must never depend on a
+		# variable being set.
+		rm -rf /overlay/.overlaybackup/staging
 		return 0
 	fi
 
@@ -53,7 +55,7 @@ start() {
 		return 0
 	fi
 
-	rm -rf "$PREVIOUS"
+	rm -rf /overlay/.overlaybackup/previous
 	sync
 
 	# Оба шага - rename в пределах одной файловой системы, то есть почти

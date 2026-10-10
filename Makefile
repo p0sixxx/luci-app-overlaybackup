@@ -4,7 +4,7 @@
 # This is free software, licensed under the GNU General Public License v2.
 #
 # Optional: the project is normally deployed by copying files onto the
-# router (see deploy/), but this builds a regular package when an OpenWrt
+# router (see install.sh), but this builds a regular package when an OpenWrt
 # buildroot or SDK is at hand. The format follows the target release -
 # .apk on 25.12 and newer, .ipk up to 24.10 - and needs nothing here.
 #
@@ -50,8 +50,8 @@ define Package/luci-app-overlaybackup/install
 	$(INSTALL_BIN) ./runtime/etc/init.d/overlaybackup-restore \
 		$(1)/etc/init.d/overlaybackup-restore
 	$(INSTALL_DIR) $(1)/usr/libexec
-	$(INSTALL_BIN) ./runtime/usr/libexec/overlaybackup-stage \
-		$(1)/usr/libexec/overlaybackup-stage
+	$(INSTALL_BIN) ./runtime/usr/libexec/overlaybackup \
+		$(1)/usr/libexec/overlaybackup
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/controller
 	$(INSTALL_DATA) ./runtime/usr/lib/lua/luci/controller/overlaybackup.lua \
 		$(1)/usr/lib/lua/luci/controller/overlaybackup.lua
@@ -68,7 +68,7 @@ define Package/luci-app-overlaybackup/postinst
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
 /etc/init.d/overlaybackup-restore enable 2>/dev/null
 # uhttpd cuts any CGI request longer than script_timeout (60 s by default)
-# in total; large backups and restores need far more. See deploy/install.sh.
+# in total; large backups and restores need far more. See install.sh.
 cur=$$(uci -q get uhttpd.main.script_timeout)
 if [ -z "$$cur" ] || [ "$$cur" -lt 1800 ] 2>/dev/null; then
 	[ -n "$$(uci -q get uhttpd.main.overlaybackup_orig_timeout)" ] || \
@@ -91,7 +91,10 @@ if [ -n "$$orig" ]; then
 	uci commit uhttpd
 fi
 rm -f /etc/rc.d/S*overlaybackup-restore 2>/dev/null
-rm -rf /overlay/.overlaybackup 2>/dev/null
+rm -f /etc/overlaybackup.meta 2>/dev/null
+rm -rf /overlay/.overlaybackup/staging 2>/dev/null
+rm -f /overlay/.overlaybackup/upload.tar.gz /overlay/.overlaybackup/pending \
+      /overlay/.overlaybackup/working /overlay/.overlaybackup/restore.log 2>/dev/null
 rm -f /tmp/luci-indexcache* 2>/dev/null
 rm -rf /tmp/luci-modulecache 2>/dev/null
 exit 0
