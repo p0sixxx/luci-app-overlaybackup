@@ -9,6 +9,8 @@
 (`admin/system/overlaybackup`) и следует языку, выбранному в LuCI: русский и
 английский.
 
+Поддерживаются OpenWrt **24.10.x** (менеджер пакетов opkg) и **25.12.x** (apk):
+установщик сам определяет, какой из них на роутере.
 Проверялось на Netis NX30 v2 / GL.iNet Flint 2 с ванильной OpenWrt 25.12.5.
 
 ## Возможности
@@ -338,6 +340,8 @@ The page shows up under **System → Overlay backup and restore**
 (`admin/system/overlaybackup`) and follows the language selected in LuCI:
 English and Russian.
 
+Supports OpenWrt **24.10.x** (opkg package manager) and **25.12.x** (apk): the
+installer works out which one the router has.
 Tested on Netis NX30 v2 / GL.iNet Flint 2 running vanilla OpenWrt 25.12.5.
 
 ## Features
