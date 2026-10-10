@@ -27,27 +27,40 @@
 
 ## Установка
 
-### Вариант 1: установка с GitHub прямо на роутере
+### Вариант 1: одной командой с GitHub
 
-Ни `git`, ни компьютер посередине не нужны — на роутере:
+На роутере:
 
 ```sh
-apk update
-apk add luci-compat luci-lua-runtime luci-lib-nixio tar
-
-cd /tmp
-wget -O overlaybackup.tar.gz https://github.com/p0sixxx/luci-app-overlaybackup/archive/refs/heads/main.tar.gz
-tar -xzf overlaybackup.tar.gz
-sh luci-app-overlaybackup-main/deploy/install.sh
+wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/deploy/bootstrap.sh | sh
 ```
 
-Обновление — те же команды: `install.sh` перезаписывает файлы поверх.
+Больше ничего не нужно — ни `git`, ни компьютера посередине, ни ручной
+установки пакетов. `bootstrap.sh` скачивает ветку `main` архивом и запускает
+`deploy/install.sh`, а тот:
+
+1. проверяет зависимости (`luci-compat`, `luci-lua-runtime`, `luci-lib-nixio`,
+   `tar`) и доставляет недостающие через `apk` (или `opkg` на выпусках до 24.10).
+   Если всё уже стоит, в сеть он не обращается вовсе;
+2. раскладывает файлы плагина и включает init-скрипт подмены слоя;
+3. поднимает `script_timeout` у `uhttpd`, сбрасывает кэши LuCI и
+   перезапускает `uhttpd`.
+
+Обновление — та же команда.
+
+Для роутера без интернета: зависимости поставьте заранее, а установщику
+передайте `--no-deps` — тогда он только проверит, что пакеты на месте:
+
+```sh
+wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/deploy/bootstrap.sh | sh -s -- --no-deps
+```
 
 Если `wget` ругается на HTTPS — в образе нет SSL-библиотеки для
 `uclient-fetch`: `apk add libustream-mbedtls` и повторить.
 
-`/tmp` очищается при перезагрузке, так что для удаления плагина архив
-придётся скачать заново и запустить `deploy/uninstall.sh`.
+Удаление: `sh /tmp/luci-app-overlaybackup-install/luci-app-overlaybackup-main/deploy/uninstall.sh`.
+`/tmp` очищается при перезагрузке, так что после неё сначала повторите
+установку — она скачает проект заново.
 
 #### С компьютера через scp
 
@@ -165,8 +178,8 @@ apk update && apk add luci-compat luci-lua-runtime luci-lib-nixio
 opkg update && opkg install luci-compat luci-lua-runtime luci-lib-nixio
 ```
 
-При установке пакетом эти зависимости подтянутся сами — команды нужны только
-для установки копированием файлов.
+`deploy/install.sh` ставит их сам; при установке пакетом они тоже
+подтягиваются сами. Команды выше нужны только для `--no-deps`.
 
 ## Как это устроено
 
@@ -290,6 +303,7 @@ runtime/                              раскладка файлов от ко�
   usr/lib/lua/luci/view/…htm          шаблон страницы
   usr/lib/lua/luci/i18n/…ru.lmo       собранный русский каталог
 deploy/MANIFEST                       список файлов и путей установки
+deploy/bootstrap.sh                   установка одной командой с GitHub
 deploy/install.sh, uninstall.sh       установка и удаление, запускать на роутере
 deploy/restart.sh                     перечитать файлы после ручного копирования
 po/                                   исходники переводов и инструменты к ним
@@ -338,27 +352,40 @@ Tested on Netis NX30 v2 / GL.iNet Flint 2 running vanilla OpenWrt 25.12.5.
 
 ## Installation
 
-### Option 1: installing from GitHub right on the router
+### Option 1: one command from GitHub
 
-Neither `git` nor a computer in between is needed - on the router:
+On the router:
 
 ```sh
-apk update
-apk add luci-compat luci-lua-runtime luci-lib-nixio tar
-
-cd /tmp
-wget -O overlaybackup.tar.gz https://github.com/p0sixxx/luci-app-overlaybackup/archive/refs/heads/main.tar.gz
-tar -xzf overlaybackup.tar.gz
-sh luci-app-overlaybackup-main/deploy/install.sh
+wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/deploy/bootstrap.sh | sh
 ```
 
-Updating is the same commands: `install.sh` overwrites the files in place.
+That is all - no `git`, no computer in between, no installing packages by hand.
+`bootstrap.sh` downloads the `main` branch as an archive and runs
+`deploy/install.sh`, which:
+
+1. checks the dependencies (`luci-compat`, `luci-lua-runtime`, `luci-lib-nixio`,
+   `tar`) and installs whatever is missing through `apk` (or `opkg` on releases
+   up to 24.10). If everything is already there, it does not go online at all;
+2. lays out the plugin files and enables the layer-swap init script;
+3. raises `uhttpd`'s `script_timeout`, drops the LuCI caches and restarts
+   `uhttpd`.
+
+Updating is the same command.
+
+For a router without internet access, install the dependencies beforehand and
+pass `--no-deps` to the installer - it then only checks the packages are there:
+
+```sh
+wget -q -O - https://raw.githubusercontent.com/p0sixxx/luci-app-overlaybackup/main/deploy/bootstrap.sh | sh -s -- --no-deps
+```
 
 If `wget` complains about HTTPS, the image lacks the SSL library for
 `uclient-fetch`: `apk add libustream-mbedtls` and try again.
 
-`/tmp` is wiped on reboot, so to remove the plugin you will need to download
-the archive again and run `deploy/uninstall.sh`.
+Removal: `sh /tmp/luci-app-overlaybackup-install/luci-app-overlaybackup-main/deploy/uninstall.sh`.
+`/tmp` is wiped on reboot, so after one, run the install again first - it
+downloads the project anew.
 
 #### From a computer over scp
 
@@ -476,8 +503,8 @@ On releases up to and including 24.10:
 opkg update && opkg install luci-compat luci-lua-runtime luci-lib-nixio
 ```
 
-Installing the package pulls these in on its own — the commands are only needed
-when installing by copying the files.
+`deploy/install.sh` installs them itself, and installing the package pulls them
+in too. The commands above are only needed with `--no-deps`.
 
 ## How it works
 
@@ -601,6 +628,7 @@ runtime/                              files laid out from the router's FS root
   usr/lib/lua/luci/view/…htm          page template
   usr/lib/lua/luci/i18n/…ru.lmo       compiled Russian catalog
 deploy/MANIFEST                       file list and install paths
+deploy/bootstrap.sh                   one-command install from GitHub
 deploy/install.sh, uninstall.sh       install and removal, run on the router
 deploy/restart.sh                     reload after copying files by hand
 po/                                   translation sources and their tooling

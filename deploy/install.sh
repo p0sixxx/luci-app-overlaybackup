@@ -1,15 +1,37 @@
 #!/bin/sh
 # luci-app-overlaybackup - install.sh
 #
-# Copies the files listed in deploy/MANIFEST onto a running OpenWrt router
-# and reloads what is needed to pick them up: LuCI's dispatch index cache
-# and uhttpd, which keeps the compiled Lua controller and page template in
-# memory. No package manager involved - this is the manual-copy runtime.
+# Installs the packages the plugin depends on, copies the files listed in
+# deploy/MANIFEST onto a running OpenWrt router and reloads what is needed to
+# pick them up: LuCI's dispatch index cache and uhttpd, which keeps the
+# compiled Lua controller and page template in memory.
 #
 # Usage (run ON the router, as root):
-#   sh install.sh
+#   sh install.sh [--no-deps]
+#
+# --no-deps   do not touch the package manager; only check that the
+#             dependencies are present (for routers without internet access)
+#
+# Or in one go, straight from GitHub - see deploy/bootstrap.sh.
 
 set -e
+
+INSTALL_DEPS=1
+for arg in "$@"; do
+	case "$arg" in
+		--no-deps) INSTALL_DEPS=0 ;;
+		*) echo "Unknown option: $arg" >&2; exit 1 ;;
+	esac
+done
+
+# What the plugin needs on top of a stock image:
+#   luci-compat, luci-lua-runtime - the page is a Lua controller and template,
+#                                   and 25.12 ships LuCI without a Lua runtime
+#   luci-lib-nixio                - file system access from the controller
+#   tar                           - GNU tar: only it keeps the overlayfs markers
+#                                   (trusted.overlay.* xattrs); BusyBox tar
+#                                   silently drops them
+DEPS="luci-compat luci-lua-runtime luci-lib-nixio tar"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RUNTIME_DIR="$(cd "${SCRIPT_DIR}/../runtime" && pwd)"
@@ -35,6 +57,99 @@ if [ ! -f "$MANIFEST" ]; then
 	exit 1
 fi
 
+# ------------------------------------------------------------------
+# dependencies - before anything else, since the checks below rely on them
+# ------------------------------------------------------------------
+
+# 25.12 and newer use apk, earlier releases opkg.
+if command -v apk >/dev/null 2>&1; then
+	PM=apk
+elif command -v opkg >/dev/null 2>&1; then
+	PM=opkg
+else
+	PM=""
+fi
+
+# Queries only the database of installed packages, so it needs no network.
+# apk 3: "info -e" exits non-zero for every name that is not installed.
+pkg_installed() {
+	case "$PM" in
+		apk)  apk info -e "$1" >/dev/null 2>&1 ;;
+		opkg) opkg status "$1" 2>/dev/null | grep -q '^Status:.* installed' ;;
+		*)    return 1 ;;
+	esac
+}
+
+missing_deps() {
+	out=""
+	for pkg in $DEPS; do
+		pkg_installed "$pkg" || out="$out $pkg"
+	done
+	echo "$out"
+}
+
+echo "Checking dependencies..."
+if [ -z "$PM" ]; then
+	echo "WARNING: neither apk nor opkg found, cannot check packages." >&2
+else
+	TODO=$(missing_deps)
+	if [ -z "$TODO" ]; then
+		echo "  all present: $DEPS"
+	elif [ "$INSTALL_DEPS" = "0" ]; then
+		echo "ERROR: missing packages:$TODO" >&2
+		echo "       install them, or run without --no-deps to let this script do it." >&2
+		exit 1
+	else
+		echo "  installing:$TODO"
+		# The package index lives in /tmp and is gone after every reboot,
+		# so it is refreshed only when something actually has to be installed.
+		case "$PM" in
+			apk)
+				apk update >/dev/null || {
+					echo "ERROR: 'apk update' failed - is the router online?" >&2
+					exit 1
+				}
+				# shellcheck disable=SC2086
+				apk add $TODO
+				;;
+			opkg)
+				opkg update >/dev/null || {
+					echo "ERROR: 'opkg update' failed - is the router online?" >&2
+					exit 1
+				}
+				# shellcheck disable=SC2086
+				opkg install $TODO
+				;;
+		esac
+
+		TODO=$(missing_deps)
+		if [ -n "$TODO" ]; then
+			echo "ERROR: still missing after installation:$TODO" >&2
+			exit 1
+		fi
+		echo "  OK"
+	fi
+fi
+
+# GNU tar is a soft requirement: everything works without it, but the
+# overlayfs markers are lost on backup and restore.
+GNU_TAR=0
+for candidate in /usr/bin/tar /bin/tar /usr/sbin/tar; do
+	[ -x "$candidate" ] || continue
+	if "$candidate" --version 2>/dev/null | grep -q 'GNU tar'; then
+		GNU_TAR=1
+		break
+	fi
+done
+if [ "$GNU_TAR" = "0" ]; then
+	echo "WARNING: GNU tar is not available - only BusyBox tar. Backups will lose" >&2
+	echo "         the overlayfs markers of deleted files and directories." >&2
+fi
+
+# ------------------------------------------------------------------
+# environment
+# ------------------------------------------------------------------
+
 MISSING=0
 [ -d /usr/lib/lua/luci ] || { echo "ERROR: /usr/lib/lua/luci not found - LuCI with Lua support is not installed." >&2; MISSING=1; }
 [ -x /etc/init.d/uhttpd ] || { echo "ERROR: /etc/init.d/uhttpd not found." >&2; MISSING=1; }
@@ -42,8 +157,9 @@ command -v tar >/dev/null 2>&1 || { echo "ERROR: tar not found." >&2; MISSING=1;
 [ "$MISSING" = "1" ] && exit 1
 
 if [ ! -f /usr/lib/lua/luci/dispatcher.lua ]; then
-	echo "WARNING: LuCI's Lua dispatcher is missing - install 'luci-compat' and" >&2
-	echo "         'luci-lua-runtime', or the page will not appear." >&2
+	echo "ERROR: LuCI's Lua dispatcher is missing even though the packages are" >&2
+	echo "       installed - the page would not appear. Check 'luci-lua-runtime'." >&2
+	exit 1
 fi
 if [ ! -d /overlay ]; then
 	echo "WARNING: /overlay does not exist - there is nothing to back up on this system." >&2
