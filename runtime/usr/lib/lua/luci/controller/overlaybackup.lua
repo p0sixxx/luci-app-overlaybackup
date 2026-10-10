@@ -98,7 +98,10 @@ end
 local function gnu_tar()
     local fs = require "nixio.fs"
 
-    for _, path in ipairs({ "/usr/bin/tar", "/bin/tar", "/usr/sbin/tar" }) do
+    -- Пакет tar (и в 24.10, и в 25.12) ставит GNU tar в /usr/libexec/tar-gnu
+    -- и переключает на него /bin/tar через alternatives. Ищем по месту
+    -- установки, а не только по ссылке, которую могло и не переключить.
+    for _, path in ipairs({ "/usr/libexec/tar-gnu", "/bin/tar", "/usr/bin/tar", "/usr/sbin/tar" }) do
         if fs.access(path) then
             local p = io.popen(path .. " --version 2>/dev/null", "r")
             if p then

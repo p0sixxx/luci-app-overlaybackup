@@ -198,7 +198,9 @@ whiteout-записью — символьным устройством `0:0`, �
 вообще**. Архив при этом выглядит целым, но после восстановления удалённые
 каталоги возвращаются из образа прошивки.
 
-Поэтому плагин ищет GNU tar (`/usr/bin/tar`) и, найдя его, добавляет
+Поэтому плагин ищет GNU tar — пакет `tar` и в 24.10, и в 25.12 ставит его в
+`/usr/libexec/tar-gnu` и переключает на него `/bin/tar` через alternatives — и,
+найдя его, добавляет
 `--xattrs --xattrs-include='trusted.overlay.*' --numeric-owner`. Без GNU tar
 всё работает, но страница показывает предупреждение. Ставится он обычным
 `apk add tar`.
@@ -523,7 +525,9 @@ attribute `trusted.overlay.opaque`, and **BusyBox tar knows nothing about
 extended attributes at all**. The archive still looks complete, but after a
 restore those deleted directories come back from the firmware image.
 
-So the plugin looks for GNU tar (`/usr/bin/tar`) and, when it finds it, adds
+So the plugin looks for GNU tar - the `tar` package installs it as
+`/usr/libexec/tar-gnu` on 24.10 and 25.12 alike, and points `/bin/tar` at it
+through alternatives - and, when it finds it, adds
 `--xattrs --xattrs-include='trusted.overlay.*' --numeric-owner`. Everything
 works without GNU tar, but the page shows a warning. Install it with a plain
 `apk add tar`.

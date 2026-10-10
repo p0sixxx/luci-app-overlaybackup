@@ -75,7 +75,9 @@ fi
 pkg_installed() {
 	case "$PM" in
 		apk)  apk info -e "$1" >/dev/null 2>&1 ;;
-		opkg) opkg status "$1" 2>/dev/null | grep -q '^Status:.* installed' ;;
+		# opkg: "Status: <want> <flags> <state>"; the state must be exactly
+		# "installed", not "not-installed" or "half-installed".
+		opkg) opkg status "$1" 2>/dev/null | grep -q '^Status: .* installed$' ;;
 		*)    return 1 ;;
 	esac
 }
@@ -134,7 +136,9 @@ fi
 # GNU tar is a soft requirement: everything works without it, but the
 # overlayfs markers are lost on backup and restore.
 GNU_TAR=0
-for candidate in /usr/bin/tar /bin/tar /usr/sbin/tar; do
+# The tar package installs GNU tar as /usr/libexec/tar-gnu and points /bin/tar
+# at it through alternatives, on 24.10 and 25.12 alike.
+for candidate in /usr/libexec/tar-gnu /bin/tar /usr/bin/tar /usr/sbin/tar; do
 	[ -x "$candidate" ] || continue
 	if "$candidate" --version 2>/dev/null | grep -q 'GNU tar'; then
 		GNU_TAR=1
