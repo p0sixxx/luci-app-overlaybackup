@@ -5,7 +5,7 @@ msgstr ""
 "Project-Id-Version: luci-app-overlaybackup\n"
 "Language: ru\n"
 "Language-Team: none\n"
-"PO-Revision-Date: 2026-08-19 00:00+0000\n"
+"PO-Revision-Date: 2026-10-10 00:00+0000\n"
 "Last-Translator: none\n"
 "MIME-Version: 1.0\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
@@ -16,50 +16,41 @@ msgstr "Бэкап и восстановление overlay"
 msgid "Here you can create a full compressed copy of the /overlay partition (every installed package, the configuration and the modified files), download it for off-device storage, and restore overlay from a previously saved archive - after a factory reset or a firmware upgrade, for instance."
 msgstr "Здесь можно создать полную сжатую копию раздела /overlay (все установленные пакеты, конфигурация и изменённые файлы), скачать её для хранения вне устройства, а также восстановить overlay из ранее сохранённого архива - например, после сброса настроек или перепрошивки."
 
+msgid "The last attempt failed"
+msgstr "Прошлая попытка не удалась"
+
+msgid "GNU tar is not installed"
+msgstr "GNU tar не установлен"
+
+msgid "BusyBox tar cannot store extended attributes, so the overlay markers that record which files and directories you deleted are lost. After a restore those deleted items come back from the firmware image. Install the tar package to keep them."
+msgstr "BusyBox tar не умеет сохранять расширенные атрибуты, поэтому метки overlay, которыми отмечены удалённые вами файлы и каталоги, теряются. После восстановления удалённое вернётся из образа прошивки. Чтобы этого не было, установите пакет tar."
+
 msgid "Creating a backup"
 msgstr "Создание бэкапа"
 
-msgid "Packs the current contents of /overlay into an archive that can then be downloaded. The archive name is made up of the device name, the OpenWrt version and the date."
-msgstr "Соберёт текущее содержимое /overlay в архив, который затем можно скачать. Имя архива складывается из имени устройства, версии OpenWrt и даты."
-
-msgid "Backup failed"
-msgstr "Ошибка создания бэкапа"
-
-msgid "The tar command exited with an error:"
-msgstr "Команда tar завершилась с ошибкой:"
-
-msgid "Create backup"
-msgstr "Создать бэкап"
-
-msgid "Creating the backup, please wait..."
-msgstr "Создание бэкапа, подождите..."
-
-msgid "Existing backup"
-msgstr "Существующий бэкап"
-
-msgid "The archive is ready in /tmp. Download it for off-device storage, or delete it."
-msgstr "Архив подготовлен в /tmp. Скачайте его для хранения вне устройства или удалите."
+msgid "The archive is streamed straight to your browser as it is packed, so nothing is written to the router and its size is not limited by free memory. The name is made up of the device name, the OpenWrt version and the date."
+msgstr "Архив отдаётся в браузер прямо по мере упаковки: на роутере ничего не сохраняется, и размер не упирается в свободную память. Имя складывается из имени устройства, версии OpenWrt и даты."
 
 msgid "Download the archive"
 msgstr "Скачать архив"
 
-msgid "Delete the archive"
-msgstr "Удалить архив"
-
 msgid "Restoring from an archive"
 msgstr "Восстановление из архива"
 
-msgid "Upload a previously saved archive - its contents will overwrite the current overlay files. The device reboots automatically once the restore is done."
-msgstr "Загрузите ранее сохранённый архив - его содержимое перезапишет текущие файлы overlay. После восстановления устройство автоматически перезагрузится."
+msgid "A restore is prepared"
+msgstr "Восстановление подготовлено"
 
-msgid "Restore completed"
-msgstr "Восстановление выполнено"
+msgid "The new layer is unpacked and waiting. It is put in place early during the next boot, before anything starts using the filesystem, and the device then reboots once more on its own."
+msgstr "Новый слой распакован и ждёт. Он встанет на место в начале следующей загрузки, пока файловой системой ещё никто не пользуется, после чего устройство перезагрузится ещё раз само."
 
-msgid "The device is rebooting, this page will be unavailable for 1-2 minutes..."
-msgstr "Устройство перезагружается, страница станет недоступна на 1-2 минуты..."
+msgid "Prepared at:"
+msgstr "Подготовлено:"
 
-msgid "Restore failed"
-msgstr "Ошибка восстановления"
+msgid "Cancel the prepared restore"
+msgstr "Отменить подготовленное восстановление"
+
+msgid "Upload a previously saved archive - its contents will replace the current overlay. The archive is unpacked next to the live layer, never into it, and the swap happens on the next boot. The device reboots twice: once to apply it, once to come up on the restored system."
+msgstr "Загрузите ранее сохранённый архив - его содержимое заменит текущий overlay. Архив распаковывается рядом с живым слоем, а не в него, и подмена происходит на следующей загрузке. Устройство перезагрузится дважды: один раз чтобы применить, второй - чтобы подняться на восстановленной системе."
 
 msgid "Choose file"
 msgstr "Выбрать файл"
@@ -67,14 +58,29 @@ msgstr "Выбрать файл"
 msgid "Restore and reboot"
 msgstr "Восстановить и перезагрузить"
 
-msgid "Restoring, please wait..."
-msgstr "Восстановление, подождите..."
+msgid "Uploading and unpacking, please wait..."
+msgstr "Загрузка и распаковка, подождите..."
+
+msgid "The overlay layer replaced by the last restore is kept at /overlay/.overlaybackup/previous as a way back. It is removed when the next restore is prepared."
+msgstr "Слой overlay, заменённый прошлым восстановлением, сохранён в /overlay/.overlaybackup/previous на случай отката. Он удаляется при подготовке следующего восстановления."
 
 msgid "Select a backup file first."
 msgstr "Сначала выберите файл резервной копии."
 
-msgid "The overlay files will be overwritten with the contents of the archive, after which the device reboots automatically. Continue?"
-msgstr "Файлы overlay будут перезаписаны содержимым архива, после чего устройство автоматически перезагрузится. Продолжить?"
+msgid "The current overlay will be replaced by the contents of the archive, and the device will reboot twice to apply it. Continue?"
+msgstr "Текущий overlay будет заменён содержимым архива, и устройство перезагрузится дважды, чтобы это применить. Продолжить?"
+
+msgid "This device does not use an /overlay/upper layer, so a staged restore is not possible."
+msgstr "На этом устройстве нет слоя /overlay/upper, поэтому восстановление с подменой слоя невозможно."
 
 msgid "The archive file was not received. Make sure you selected a file before pressing the button."
 msgstr "Файл архива не был получен. Убедитесь, что вы выбрали файл перед нажатием кнопки."
+
+msgid "The uploaded file is not a valid .tar.gz archive."
+msgstr "Загруженный файл не является корректным архивом .tar.gz."
+
+msgid "Unpacking the archive failed."
+msgstr "Распаковать архив не удалось."
+
+msgid "The archive does not look like an overlay backup: it has no etc directory. Nothing was changed."
+msgstr "Архив не похож на бэкап overlay: в нём нет каталога etc. Ничего не изменено."

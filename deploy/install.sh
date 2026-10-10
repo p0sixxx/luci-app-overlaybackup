@@ -95,6 +95,14 @@ while IFS= read -r line; do
 	echo "  install $dst"
 done < "$MANIFEST"
 
+# The init script carries out the layer swap on the next boot; it exits
+# immediately when no restore is pending, so enabling it is harmless.
+if [ -f /etc/init.d/overlaybackup-restore ]; then
+	chmod 0755 /etc/init.d/overlaybackup-restore
+	/etc/init.d/overlaybackup-restore enable 2>/dev/null || true
+	echo "  enable  /etc/init.d/overlaybackup-restore"
+fi
+
 echo "Clearing the LuCI caches and restarting uhttpd..."
 rm -f /tmp/luci-indexcache* 2>/dev/null || true
 rm -rf /tmp/luci-modulecache 2>/dev/null || true

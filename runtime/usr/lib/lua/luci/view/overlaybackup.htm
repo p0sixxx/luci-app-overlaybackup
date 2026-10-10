@@ -1,5 +1,7 @@
 <%+header%>
 
+<%+header%>
+
 <style>
 .obk-wrap { max-width: 760px; }
 .obk-desc { opacity: 0.75; margin-bottom: 24px; line-height: 1.5; }
@@ -29,6 +31,10 @@
 .obk-alert-success {
     background: rgba(46,125,50,0.12);
     border: 1px solid rgba(46,125,50,0.45);
+}
+.obk-alert-warning {
+    background: rgba(230,145,20,0.12);
+    border: 1px solid rgba(230,145,20,0.45);
 }
 .obk-alert-error {
     background: rgba(192,57,43,0.12);
@@ -115,68 +121,47 @@
 <%:Here you can create a full compressed copy of the /overlay partition (every installed package, the configuration and the modified files), download it for off-device storage, and restore overlay from a previously saved archive - after a factory reset or a firmware upgrade, for instance.%>
 </p>
 
+<% if error_log then %>
+    <div class="obk-alert obk-alert-error">
+        <div class="obk-alert-title"><%:The last attempt failed%></div>
+    </div>
+    <pre class="obk-log"><%=pcdata(error_log)%></pre>
+<% end %>
+
+<% if not has_gnu_tar then %>
+    <div class="obk-alert obk-alert-warning">
+        <div class="obk-alert-title"><%:GNU tar is not installed%></div>
+        <div><%:BusyBox tar cannot store extended attributes, so the overlay markers that record which files and directories you deleted are lost. After a restore those deleted items come back from the firmware image. Install the tar package to keep them.%></div>
+    </div>
+<% end %>
+
 <div class="obk-card">
     <h3><%:Creating a backup%></h3>
-    <p class="obk-card-desc"><%:Packs the current contents of /overlay into an archive that can then be downloaded. The archive name is made up of the device name, the OpenWrt version and the date.%></p>
-
-    <% if error_log then %>
-        <div class="obk-alert obk-alert-error">
-            <div class="obk-alert-title"><%:Backup failed%></div>
-            <div><%:The tar command exited with an error:%></div>
-        </div>
-        <pre class="obk-log"><%=pcdata(error_log)%></pre>
-    <% end %>
-
-    <form method="post" action="<%=url('admin/system/overlaybackup/create_backup')%>" onsubmit="return showLoadingMessage()">
-        <div class="obk-actions">
-            <input type="submit" class="cbi-button cbi-button-apply" value="<%:Create backup%>" />
-            <div id="loading-message" class="obk-loading" style="display:none;">
-                <span class="obk-spinner"></span>
-                <span><%:Creating the backup, please wait...%></span>
-            </div>
-        </div>
-    </form>
-
-    <% if backup_name then %>
-        <div class="obk-existing">
-            <h3><%:Existing backup%></h3>
-            <p class="obk-card-desc">
-            <%:The archive is ready in /tmp. Download it for off-device storage, or delete it.%>
-            <br /><code class="obk-file-name-code"><%=pcdata(backup_name)%></code>
-            </p>
-            <div class="obk-actions">
-                <form method="get" action="<%=url('admin/system/overlaybackup/download')%>" style="margin:0;">
-                    <input type="submit" class="cbi-button cbi-button-add" value="<%:Download the archive%>" />
-                </form>
-                <form method="post" action="<%=url('admin/system/overlaybackup/delete_backup')%>" style="margin:0;">
-                    <input type="submit" class="cbi-button cbi-button-reset" value="<%:Delete the archive%>" />
-                </form>
-            </div>
-        </div>
-    <% end %>
+    <p class="obk-card-desc"><%:The archive is streamed straight to your browser as it is packed, so nothing is written to the router and its size is not limited by free memory. The name is made up of the device name, the OpenWrt version and the date.%></p>
+    <div class="obk-actions">
+        <a class="cbi-button cbi-button-add" href="<%=url('admin/system/overlaybackup/download')%>"><%:Download the archive%></a>
+    </div>
 </div>
 
 <div class="obk-card">
     <h3><%:Restoring from an archive%></h3>
-    <p class="obk-card-desc">
-    <%:Upload a previously saved archive - its contents will overwrite the current overlay files. The device reboots automatically once the restore is done.%>
-    </p>
 
-    <% if restore_ok ~= nil then %>
-        <% if restore_ok then %>
-            <div class="obk-alert obk-alert-success">
-                <div class="obk-alert-title"><%:Restore completed%></div>
-                <div id="reboot-notice"><%:The device is rebooting, this page will be unavailable for 1-2 minutes...%></div>
-            </div>
-        <% else %>
-            <div class="obk-alert obk-alert-error">
-                <div class="obk-alert-title"><%:Restore failed%></div>
-            </div>
-        <% end %>
-        <% if restore_log and restore_log:match("%S") then %>
-            <pre class="obk-log"><%=pcdata(restore_log)%></pre>
-        <% end %>
-    <% end %>
+<% if pending then %>
+    <div class="obk-alert obk-alert-success">
+        <div class="obk-alert-title"><%:A restore is prepared%></div>
+        <div><%:The new layer is unpacked and waiting. It is put in place early during the next boot, before anything starts using the filesystem, and the device then reboots once more on its own.%></div>
+    </div>
+    <p class="obk-card-desc"><%:Prepared at:%> <code class="obk-file-name-code"><%=pcdata(pending)%></code></p>
+    <form method="post" action="<%=url('admin/system/overlaybackup/cancel')%>">
+        <input type="hidden" name="token" value="<%=token%>" />
+        <div class="obk-actions">
+            <input type="submit" class="cbi-button cbi-button-reset" value="<%:Cancel the prepared restore%>" />
+        </div>
+    </form>
+<% else %>
+    <p class="obk-card-desc">
+    <%:Upload a previously saved archive - its contents will replace the current overlay. The archive is unpacked next to the live layer, never into it, and the swap happens on the next boot. The device reboots twice: once to apply it, once to come up on the restored system.%>
+    </p>
 
     <form method="post" action="<%=url('admin/system/overlaybackup/restore')%>" enctype="multipart/form-data"
           onsubmit="return confirmRestore()">
@@ -190,18 +175,21 @@
             <input type="submit" class="cbi-button cbi-button-negative" value="<%:Restore and reboot%>" />
             <div id="restore-loading-message" class="obk-loading" style="display:none;">
                 <span class="obk-spinner"></span>
-                <span><%:Restoring, please wait...%></span>
+                <span><%:Uploading and unpacking, please wait...%></span>
             </div>
         </div>
     </form>
+<% end %>
+
+<% if previous then %>
+    <div class="obk-existing">
+        <p class="obk-card-desc"><%:The overlay layer replaced by the last restore is kept at /overlay/.overlaybackup/previous as a way back. It is removed when the next restore is prepared.%></p>
+    </div>
+<% end %>
 </div>
 </div>
 
 <script type="text/javascript">
-function showLoadingMessage() {
-    document.getElementById("loading-message").style.display = "flex";
-    return true;
-}
 function updateArchiveFileName(input) {
     var el = document.getElementById("archive-file-name");
     el.textContent = (input.files && input.files.length > 0) ? input.files[0].name : "";
@@ -220,19 +208,11 @@ function confirmRestore() {
         return false;
     }
 
-    var msg = "<%:The overlay files will be overwritten with the contents of the archive, after which the device reboots automatically. Continue?%>";
+    var msg = "<%:The current overlay will be replaced by the contents of the archive, and the device will reboot twice to apply it. Continue?%>";
     if (!confirm(msg)) {
         return false;
     }
     return showRestoreLoadingMessage();
-}
-
-// Если только что было успешное восстановление - устройство уже
-// перезагружается. Через полминуты пробуем сами обновить страницу.
-if (document.getElementById("reboot-notice")) {
-    setTimeout(function () {
-        window.location.reload();
-    }, 45000);
 }
 </script>
 

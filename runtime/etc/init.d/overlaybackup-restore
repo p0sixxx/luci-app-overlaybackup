@@ -1,0 +1,79 @@
+#!/bin/sh /etc/rc.common
+#
+# luci-app-overlaybackup - подмена слоя overlay на загрузке
+#
+# Распаковывать архив прямо в смонтированный /overlay/upper нельзя:
+# правка слоёв смонтированного overlayfs ядром не поддерживается, и живая
+# система немедленно получает несогласованный вид - открытые файлы уезжают
+# на подменённые inode, а обращения к ним падают с "Stale file handle".
+#
+# Поэтому LuCI-страница только раскладывает новый слой рядом, в
+# /overlay/.overlaybackup/staging, и оставляет флаг. Собственно подмену
+# делает этот скрипт - одним rename на той же файловой системе, на ранней
+# загрузке, пока системой ещё никто не пользуется, - и сразу перезагружает
+# устройство, чтобы ядро увидело новый слой с нуля.
+#
+# Прежний слой не удаляется, а переименовывается в previous: это откат,
+# если восстановленная система окажется нерабочей. Его убирает следующее
+# восстановление - к тому моменту система уже загружена и слой не занят.
+
+START=01
+
+STAGE_ROOT=/overlay/.overlaybackup
+PENDING="$STAGE_ROOT/pending"
+STAGING="$STAGE_ROOT/staging"
+PREVIOUS="$STAGE_ROOT/previous"
+UPPER=/overlay/upper
+
+log() {
+	logger -t overlaybackup-restore "$1"
+	echo "overlaybackup-restore: $1" > /dev/console 2>/dev/null
+}
+
+start() {
+	[ -f "$PENDING" ] || return 0
+
+	# Флаг снимаем ДО подмены и при любой проверке: он лежит вне upper и
+	# переживает её, так что иначе устройство ушло бы в цикл перезагрузок.
+	rm -f "$PENDING"
+
+	if [ ! -d "$STAGING" ]; then
+		log "staging directory is missing, nothing to do"
+		return 0
+	fi
+
+	if [ ! -d "$STAGING/etc" ]; then
+		log "staging directory has no etc, refusing to swap"
+		rm -rf "$STAGING"
+		return 0
+	fi
+
+	if [ ! -d "$UPPER" ]; then
+		log "$UPPER is missing, refusing to swap"
+		return 0
+	fi
+
+	rm -rf "$PREVIOUS"
+	sync
+
+	# Оба шага - rename в пределах одной файловой системы, то есть почти
+	# мгновенные. Если второй не удался, возвращаем прежний слой на место:
+	# остаться без upper значит остаться без загрузки.
+	if ! mv "$UPPER" "$PREVIOUS"; then
+		log "could not move the current layer aside, nothing was changed"
+		return 0
+	fi
+
+	if ! mv "$STAGING" "$UPPER"; then
+		log "could not put the new layer in place, rolling back"
+		mv "$PREVIOUS" "$UPPER"
+		return 0
+	fi
+
+	sync
+	log "overlay layer replaced, rebooting"
+
+	# -f намеренно: скрипты завершения работы читали бы файлы прежнего
+	# слоя, которого на его месте уже нет.
+	reboot -f
+}

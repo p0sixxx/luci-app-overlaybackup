@@ -17,16 +17,26 @@ function index()
     -- осталось бы русским до сброса кэша.
     entry({"admin", "system", "overlaybackup"}, firstchild(), _("Overlay backup and restore"), 60).dependent = false
     entry({"admin", "system", "overlaybackup", "backup"}, call("action_backup_page"), _("Overlay backup and restore"), 10)
-    entry({"admin", "system", "overlaybackup", "create_backup"}, call("create_backup"), nil)
-    entry({"admin", "system", "overlaybackup", "delete_backup"}, call("delete_backup"), nil)
     entry({"admin", "system", "overlaybackup", "download"}, call("download_backup"), nil)
     entry({"admin", "system", "overlaybackup", "restore"}, call("restore_backup"), nil)
+    entry({"admin", "system", "overlaybackup", "cancel"}, call("cancel_restore"), nil)
 end
 
--- Архив в /tmp называется так же, как его получает браузер:
--- overlay-backup-<имя устройства>-<версия OpenWrt>-<ГГГГ-ММ-ДД>.tar.gz
--- Поэтому фиксированного пути нет, и архив ищется по маске.
-local BACKUP_GLOB = "/tmp/overlay-backup-*.tar.gz"
+-- Рабочий каталог лежит РЯДОМ с upper, на той же файловой системе и вне
+-- смонтированного объединения. Это принципиально: распаковка идёт сюда,
+-- а не в живой upper, и подменой слоя занимается init-скрипт на загрузке.
+local STAGE_ROOT = "/overlay/.overlaybackup"
+local UPLOAD     = STAGE_ROOT .. "/upload.tar.gz"
+local STAGING    = STAGE_ROOT .. "/staging"
+local PREVIOUS   = STAGE_ROOT .. "/previous"
+local PENDING    = STAGE_ROOT .. "/pending"
+local LOGFILE    = STAGE_ROOT .. "/restore.log"
+
+local UPPER = "/overlay/upper"
+
+-- ------------------------------------------------------------------
+-- вспомогательное
+-- ------------------------------------------------------------------
 
 -- Оставляем только безопасные для имени файла символы: имя хоста задаёт
 -- пользователь, а кавычка или слэш сломали бы заголовок Content-Disposition.
@@ -72,179 +82,161 @@ local function backup_filename()
         hostname, release, os.date("%Y-%m-%d"))
 end
 
--- Путь к самому свежему архиву в /tmp или nil, если архива нет.
-local function find_backup()
-    local p = io.popen("ls -1t " .. BACKUP_GLOB .. " 2>/dev/null")
-    if not p then
-        return nil
-    end
-    local path = p:read("*l")
-    p:close()
+-- Путь к GNU tar или nil, если его нет.
+--
+-- Это не придирка к вкусу: метки overlayfs живут в расширенных атрибутах
+-- (trusted.overlay.opaque на каталоге, перекрывающем нижний слой), а
+-- BusyBox tar про xattr не знает вообще и молча их теряет. Архив при этом
+-- выглядит целым, но после восстановления удалённые каталоги возвращаются
+-- из прошивки. Сохранить их умеет только GNU tar с --xattrs.
+local function gnu_tar()
+    local fs = require "nixio.fs"
 
-    if path and path:match("%S") then
-        return path
+    for _, path in ipairs({ "/usr/bin/tar", "/bin/tar", "/usr/sbin/tar" }) do
+        if fs.access(path) then
+            local p = io.popen(path .. " --version 2>/dev/null", "r")
+            if p then
+                local first = p:read("*l") or ""
+                p:close()
+                if first:match("GNU tar") then
+                    return path
+                end
+            end
+        end
     end
+
     return nil
 end
 
--- Имя файла без каталога - его показываем на странице и отдаём браузеру.
-local function backup_basename(path)
-    return path and path:match("([^/]+)$") or nil
+-- Ключи сохранения метаданных для GNU tar. Глоб обязательно в кавычках:
+-- иначе его раскрыл бы шелл. --hard-dereference только при создании - он
+-- превращает хардлинки в обычные файлы, и живую систему для этого трогать
+-- не надо (прежние версии плагина ради этого правили файлы в overlay).
+local XATTR_BASE    = " --xattrs --xattrs-include='trusted.overlay.*' --numeric-owner"
+local XATTR_CREATE  = XATTR_BASE .. " --hard-dereference"
+local XATTR_EXTRACT = XATTR_BASE
+
+-- os.execute возвращает код возврата в Lua 5.1 и true/false в 5.2+.
+local function succeeded(rc)
+    return rc == true or rc == 0
 end
 
--- Удаляем все архивы разом: имя зависит от даты, поэтому за несколько
--- дней их может накопиться несколько. Заодно подчищаем overlay.tar.gz -
--- так архив назывался в прежних версиях плагина, и после обновления он
--- иначе остался бы висеть в /tmp незамеченным.
-local function remove_backups()
-    os.execute("rm -f " .. BACKUP_GLOB .. " /tmp/overlay.tar.gz >/dev/null 2>&1")
+-- Что архивируем. На большинстве устройств изменения лежат в /overlay/upper;
+-- если такой раскладки нет, забираем /overlay целиком.
+local function source_dir()
+    local fs = require "nixio.fs"
+    if fs.stat(UPPER) then
+        return UPPER
+    end
+    return "/overlay"
 end
+
+-- ------------------------------------------------------------------
+-- страница
+-- ------------------------------------------------------------------
 
 function action_backup_page()
     local fs = require "nixio.fs"
     local tpl = require "luci.template"
 
-    local backup_file = find_backup()
-    local log_file = "/tmp/overlay-backup.log"
-    local restore_ok_file = "/tmp/overlay-restore-success.log"
-    local restore_err_file = "/tmp/overlay-restore-error.log"
-
-    -- Показываем лог ошибки только один раз - сразу после неудачной
-    -- попытки. Прочитали - тут же удаляем, чтобы при следующей
-    -- перезагрузке страницы (без новой попытки) блок ошибки не висел.
-    local error_log = nil
-    if not backup_file and fs.access(log_file) then
-        error_log = fs.readfile(log_file)
-        os.remove(log_file)
-    end
-
-    -- Аналогично для результата восстановления - однократное сообщение.
-    local restore_ok = nil
-    local restore_log = nil
-    if fs.access(restore_ok_file) then
-        restore_ok = true
-        restore_log = fs.readfile(restore_ok_file)
-        os.remove(restore_ok_file)
-    elseif fs.access(restore_err_file) then
-        restore_ok = false
-        restore_log = fs.readfile(restore_err_file)
-        os.remove(restore_err_file)
+    -- Результат прошлой попытки показываем один раз: прочитали - удалили,
+    -- чтобы сообщение не висело при следующем открытии страницы.
+    local message = nil
+    if fs.access(LOGFILE) then
+        message = fs.readfile(LOGFILE)
+        os.remove(LOGFILE)
     end
 
     tpl.render("overlaybackup", {
-        backup_name = backup_basename(backup_file),
-        error_log = error_log,
-        restore_ok = restore_ok,
-        restore_log = restore_log
+        pending      = fs.access(PENDING) and (fs.readfile(PENDING) or "") or nil,
+        previous     = fs.stat(PREVIOUS) and true or nil,
+        has_gnu_tar  = gnu_tar() and true or false,
+        error_log    = message
     })
 end
 
-function create_backup()
-    local backup_file = "/tmp/" .. backup_filename()
-    local log_file = "/tmp/overlay-backup.log"
-    local exclude_file = "/tmp/overlay-backup-exclude.list"
-    local fs = require "nixio.fs"
-
-    -- На большинстве устройств данные overlay лежат в /overlay/upper,
-    -- служебная /overlay/work нам не нужна. Но если по какой-то причине
-    -- такой раскладки нет - подстрахуемся и заберём /overlay целиком.
-    local source_dir = "/overlay/upper"
-    if not fs.stat(source_dir) then
-        source_dir = "/overlay"
-    end
-
-    -- Разрываем хардлинки перед архивацией: если в overlay есть файлы
-    -- с несколькими именами на один inode (например, дублирующиеся
-    -- скрипты в /etc/uci-defaults), tar сохранит их как hardlink-записи,
-    -- а при восстановлении на overlayfs создание hardlink может падать
-    -- с "Operation not permitted". Превращаем такие файлы в независимые
-    -- копии - на содержимое и работу системы это не влияет.
-    os.execute(string.format(
-        "find %s -xdev -type f -links +1 -exec sh -c 'cp -p \"$1\" \"$1.tmp_delink\" && mv \"$1.tmp_delink\" \"$1\"' _ {} \\; > %s 2>&1",
-        source_dir, log_file
-    ))
-
-    -- BusyBox tar (используется в этой прошивке) не понимает длинную опцию
-    -- --exclude=..., только -X FILE со списком шаблонов - поэтому пишем
-    -- шаблоны исключения в отдельный файл.
-    fs.writefile(exclude_file, "work\n./work\n")
-
-    local cmd = string.format(
-        "tar -czf %s -C %s -X %s . >> %s 2>&1",
-        backup_file, source_dir, exclude_file, log_file
-    )
-
-    -- Прежние архивы убираем до создания нового: их имена отличаются
-    -- датой, и иначе в /tmp копились бы копии за разные дни.
-    remove_backups()
-    local ok = os.execute(cmd)
-
-    if ok == true or ok == 0 then
-        -- успех - лог и файл исключений больше не нужны
-        os.remove(log_file)
-        os.remove(exclude_file)
-    else
-        -- tar создаёт файл даже когда падает на полпути. Недоделанный
-        -- архив надо убрать: иначе страница сочтёт бэкап готовым и не
-        -- покажет лог ошибки, а пользователь скачает битый файл.
-        remove_backups()
-        os.remove(exclude_file)
-    end
-
-    luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
-end
+-- ------------------------------------------------------------------
+-- бэкап: архив отдаётся потоком, без промежуточного файла
+-- ------------------------------------------------------------------
 
 function download_backup()
-    local backup_file = find_backup()
-    local fs = require "nixio.fs"
-    if backup_file and fs.access(backup_file) then
-        local stat = fs.stat(backup_file)
-        local name = backup_basename(backup_file)
+    local dir = source_dir()
+    local tar = gnu_tar()
+    local cmd
 
-        luci.http.header('Content-Disposition', 'attachment; filename="' .. name .. '"')
-        if stat and stat.size then
-            luci.http.header('Content-Length', tostring(stat.size))
+    if tar then
+        -- Исключения нужны только когда архивируем /overlay целиком:
+        -- work - служебный каталог overlayfs, .overlaybackup - наш.
+        local exclude = ""
+        if dir ~= UPPER then
+            exclude = " --exclude=./work --exclude=./.overlaybackup"
         end
-        luci.http.prepare_content("application/x-tar-gz")
-
-        -- Читаем и отдаём файл блоками, а не целиком в память -
-        -- иначе на устройствах с малым объёмом RAM процесс может
-        -- падать на больших архивах, обрывая ответ (видно в браузере
-        -- как "Bad Request").
-        local f = io.open(backup_file, "rb")
-        if f then
-            local block = 65536
-            local chunk = f:read(block)
-            while chunk do
-                luci.http.write(chunk)
-                chunk = f:read(block)
-            end
-            f:close()
-        else
-            luci.http.status(500, "Unable to open backup file")
-        end
+        cmd = string.format("%s%s%s -czf - -C %s . 2>/dev/null",
+            tar, XATTR_CREATE, exclude, dir)
     else
-        luci.http.status(404, "Backup file not found")
+        -- BusyBox tar не понимает длинную опцию --exclude, только -X FILE
+        -- со списком шаблонов.
+        local exclude = ""
+        if dir ~= UPPER then
+            local list = "/tmp/overlay-backup-exclude.list"
+            require("nixio.fs").writefile(list, "work\n./work\n.overlaybackup\n./.overlaybackup\n")
+            exclude = " -X " .. list
+        end
+        cmd = string.format("tar%s -czf - -C %s . 2>/dev/null", exclude, dir)
     end
+
+    luci.http.header('Content-Disposition',
+        'attachment; filename="' .. backup_filename() .. '"')
+    luci.http.prepare_content("application/x-tar-gz")
+
+    -- Архив нигде не складывается: tar пишет в конвейер, мы перекладываем
+    -- блоками прямо в ответ. Промежуточный файл в /tmp (это ОЗУ) упирался
+    -- в свободную память и на больших overlay обрывался на полпути.
+    local p = io.popen(cmd, "r")
+    if not p then
+        luci.http.status(500, "Unable to start tar")
+        return
+    end
+
+    local block = 65536
+    local chunk = p:read(block)
+    while chunk do
+        luci.http.write(chunk)
+        chunk = p:read(block)
+    end
+    p:close()
+end
+
+-- ------------------------------------------------------------------
+-- восстановление: распаковка рядом с upper, подмена - на загрузке
+-- ------------------------------------------------------------------
+
+local function fail(text)
+    require("nixio.fs").writefile(LOGFILE, text .. "\n")
+    luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
 end
 
 function restore_backup()
     local fs = require "nixio.fs"
 
-    local upload_path = "/tmp/overlay-restore-upload.tar.gz"
-    local ok_file = "/tmp/overlay-restore-success.log"
-    local err_file = "/tmp/overlay-restore-error.log"
+    if not fs.stat(UPPER) then
+        return fail(i18n.translate(
+            "This device does not use an /overlay/upper layer, so a staged restore is not possible."))
+    end
 
-    os.remove(ok_file)
-    os.remove(err_file)
-    os.remove(upload_path)
+    -- Прошлые следы убираем до приёма файла: система сейчас загружена
+    -- нормально, и ничто из них не используется.
+    os.execute("rm -rf " .. STAGING .. " " .. PREVIOUS .. " " .. UPLOAD ..
+               " " .. PENDING .. " >/dev/null 2>&1")
+    os.execute("mkdir -p " .. STAGE_ROOT .. " >/dev/null 2>&1")
 
-    -- Принимаем загружаемый файл потоково (пишем чанки на диск сразу),
-    -- а не собираем всё в памяти - архив может быть довольно большим.
+    -- Принимаем загружаемый файл потоково, сразу на диск. Пишем на
+    -- файловую систему overlay, а не в /tmp: /tmp - это ОЗУ, и архив
+    -- на сотни мегабайт туда просто не поместится.
     local fd
     luci.http.setfilehandler(function(meta, chunk, eof)
         if not fd then
-            fd = io.open(upload_path, "wb")
+            fd = io.open(UPLOAD, "wb")
         end
         if chunk and fd then
             fd:write(chunk)
@@ -259,61 +251,63 @@ function restore_backup()
     -- в процессе которого сработает обработчик выше.
     luci.http.formvalue("archive")
 
-    if not fs.access(upload_path) then
-        fs.writefile(err_file, i18n.translate(
-            "The archive file was not received. Make sure you selected a file before pressing the button.") .. "\n")
-        luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
-        return
+    if not fs.access(UPLOAD) then
+        return fail(i18n.translate(
+            "The archive file was not received. Make sure you selected a file before pressing the button."))
     end
 
-    -- Куда именно распаковывать: та же логика, что и при создании
-    -- бэкапа. Важно: пишем прямо в /overlay/upper, а НЕ в "/" -
-    -- при распаковке в объединённый (merged) overlay ядро может
-    -- отказывать в замене файлов, унаследованных из read-only слоя
-    -- (симлинки, хардлинки) с ошибкой "Operation not permitted".
-    -- Запись напрямую в upper-слой минует эту union-механику.
-    local target_dir = "/overlay/upper"
-    if not fs.stat(target_dir) then
-        target_dir = "/overlay"
+    if not succeeded(os.execute("tar -tzf " .. UPLOAD .. " >/dev/null 2>&1")) then
+        os.execute("rm -f " .. UPLOAD)
+        return fail(i18n.translate(
+            "The uploaded file is not a valid .tar.gz archive."))
     end
 
-    local log_file = "/tmp/overlay-restore.log"
-    local cmd = string.format(
-        "tar -xzf %s -C %s > %s 2>&1",
-        upload_path, target_dir, log_file
-    )
-    local ok = os.execute(cmd)
-    local tar_output = fs.readfile(log_file) or ""
-
-    os.remove(upload_path)
-    os.remove(log_file)
-
-    if ok == true or ok == 0 then
-        -- В лог кладём только реальный вывод tar (обычно он пустой при
-        -- успехе) - текст про успех и перезагрузку уже показан в плашке
-        -- выше, дублировать его в блоке лога не нужно.
-        fs.writefile(ok_file, tar_output)
-
-        -- Перезагрузка с небольшой задержкой и в фоне - чтобы этот HTTP-ответ
-        -- (редирект + отрисовка страницы с сообщением) успел дойти до браузера
-        -- прежде, чем соединение оборвётся из-за ребута.
-        os.execute("(sleep 3 && reboot) >/dev/null 2>&1 &")
+    local tar = gnu_tar()
+    local unpack_log = STAGE_ROOT .. "/unpack.log"
+    local cmd
+    if tar then
+        cmd = string.format("%s%s -xzf %s -C %s > %s 2>&1",
+            tar, XATTR_EXTRACT, UPLOAD, STAGING, unpack_log)
     else
-        fs.writefile(err_file, tar_output)
+        cmd = string.format("tar -xzf %s -C %s > %s 2>&1",
+            UPLOAD, STAGING, unpack_log)
     end
+
+    os.execute("mkdir -p " .. STAGING)
+    -- Через os.execute, а не io.popen: в Lua 5.1 popen:close() код возврата
+    -- не отдаёт, и провал распаковки прошёл бы незамеченным.
+    local ok = succeeded(os.execute(cmd))
+    local output = fs.readfile(unpack_log) or ""
+    os.remove(unpack_log)
+
+    os.execute("rm -f " .. UPLOAD)
+
+    if not ok then
+        os.execute("rm -rf " .. STAGING)
+        return fail(i18n.translate("Unpacking the archive failed.") .. "\n" .. output)
+    end
+
+    -- Проверка вменяемости перед тем, как ставить подмену слоя в очередь.
+    -- Подсунутый архив не того содержания оставил бы устройство без etc,
+    -- то есть незагружаемым, а это чинится только сбросом к заводским.
+    if not fs.stat(STAGING .. "/etc") then
+        os.execute("rm -rf " .. STAGING)
+        return fail(i18n.translate(
+            "The archive does not look like an overlay backup: it has no etc directory. Nothing was changed."))
+    end
+
+    fs.writefile(PENDING, os.date("%Y-%m-%d %H:%M:%S") .. "\n")
+    os.execute("sync")
+
+    -- Скрипт сработает на следующей загрузке, пока системой ещё никто
+    -- не пользуется, подменит слой и сразу перезагрузится ещё раз.
+    os.execute("/etc/init.d/overlaybackup-restore enable >/dev/null 2>&1")
+    os.execute("(sleep 3 && reboot) >/dev/null 2>&1 &")
 
     luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
 end
 
-function delete_backup()
-    local log_file = "/tmp/overlay-backup.log"
-    local exclude_file = "/tmp/overlay-backup-exclude.list"
-    remove_backups()
-    if nixio.fs.access(log_file) then
-        os.remove(log_file)
-    end
-    if nixio.fs.access(exclude_file) then
-        os.remove(exclude_file)
-    end
+function cancel_restore()
+    os.execute("rm -rf " .. STAGING .. " " .. UPLOAD .. " " .. PENDING .. " >/dev/null 2>&1")
     luci.http.redirect(luci.dispatcher.build_url("admin/system/overlaybackup/backup"))
 end

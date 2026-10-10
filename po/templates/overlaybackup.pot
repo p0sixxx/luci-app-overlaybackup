@@ -15,49 +15,40 @@ msgstr ""
 msgid "Here you can create a full compressed copy of the /overlay partition (every installed package, the configuration and the modified files), download it for off-device storage, and restore overlay from a previously saved archive - after a factory reset or a firmware upgrade, for instance."
 msgstr ""
 
+msgid "The last attempt failed"
+msgstr ""
+
+msgid "GNU tar is not installed"
+msgstr ""
+
+msgid "BusyBox tar cannot store extended attributes, so the overlay markers that record which files and directories you deleted are lost. After a restore those deleted items come back from the firmware image. Install the tar package to keep them."
+msgstr ""
+
 msgid "Creating a backup"
 msgstr ""
 
-msgid "Packs the current contents of /overlay into an archive that can then be downloaded. The archive name is made up of the device name, the OpenWrt version and the date."
-msgstr ""
-
-msgid "Backup failed"
-msgstr ""
-
-msgid "The tar command exited with an error:"
-msgstr ""
-
-msgid "Create backup"
-msgstr ""
-
-msgid "Creating the backup, please wait..."
-msgstr ""
-
-msgid "Existing backup"
-msgstr ""
-
-msgid "The archive is ready in /tmp. Download it for off-device storage, or delete it."
+msgid "The archive is streamed straight to your browser as it is packed, so nothing is written to the router and its size is not limited by free memory. The name is made up of the device name, the OpenWrt version and the date."
 msgstr ""
 
 msgid "Download the archive"
 msgstr ""
 
-msgid "Delete the archive"
-msgstr ""
-
 msgid "Restoring from an archive"
 msgstr ""
 
-msgid "Upload a previously saved archive - its contents will overwrite the current overlay files. The device reboots automatically once the restore is done."
+msgid "A restore is prepared"
 msgstr ""
 
-msgid "Restore completed"
+msgid "The new layer is unpacked and waiting. It is put in place early during the next boot, before anything starts using the filesystem, and the device then reboots once more on its own."
 msgstr ""
 
-msgid "The device is rebooting, this page will be unavailable for 1-2 minutes..."
+msgid "Prepared at:"
 msgstr ""
 
-msgid "Restore failed"
+msgid "Cancel the prepared restore"
+msgstr ""
+
+msgid "Upload a previously saved archive - its contents will replace the current overlay. The archive is unpacked next to the live layer, never into it, and the swap happens on the next boot. The device reboots twice: once to apply it, once to come up on the restored system."
 msgstr ""
 
 msgid "Choose file"
@@ -66,14 +57,29 @@ msgstr ""
 msgid "Restore and reboot"
 msgstr ""
 
-msgid "Restoring, please wait..."
+msgid "Uploading and unpacking, please wait..."
+msgstr ""
+
+msgid "The overlay layer replaced by the last restore is kept at /overlay/.overlaybackup/previous as a way back. It is removed when the next restore is prepared."
 msgstr ""
 
 msgid "Select a backup file first."
 msgstr ""
 
-msgid "The overlay files will be overwritten with the contents of the archive, after which the device reboots automatically. Continue?"
+msgid "The current overlay will be replaced by the contents of the archive, and the device will reboot twice to apply it. Continue?"
+msgstr ""
+
+msgid "This device does not use an /overlay/upper layer, so a staged restore is not possible."
 msgstr ""
 
 msgid "The archive file was not received. Make sure you selected a file before pressing the button."
+msgstr ""
+
+msgid "The uploaded file is not a valid .tar.gz archive."
+msgstr ""
+
+msgid "Unpacking the archive failed."
+msgstr ""
+
+msgid "The archive does not look like an overlay backup: it has no etc directory. Nothing was changed."
 msgstr ""

@@ -13,15 +13,17 @@
 
 ## Возможности
 
-* **Создание бэкапа** — всё содержимое overlay (установленные пакеты,
-  конфигурация, изменённые и добавленные файлы) упаковывается в
-  `/tmp/overlay-backup-<имя устройства>-<версия OpenWrt>-<ГГГГ-ММ-ДД>.tar.gz`.
-* **Скачивание** готового архива для хранения вне устройства — под тем же
-  именем, под каким он лежит в `/tmp`.
-* **Удаление** архива из `/tmp`, чтобы не занимать оперативную память.
-* **Восстановление** из ранее сохранённого архива с автоматической
-  перезагрузкой устройства после распаковки.
-* Вывод `tar` показывается на странице, если операция завершилась ошибкой.
+* **Скачивание бэкапа** — всё содержимое overlay (установленные пакеты,
+  конфигурация, изменённые и добавленные файлы) упаковывается и сразу
+  отдаётся в браузер под именем
+  `overlay-backup-<имя устройства>-<версия OpenWrt>-<ГГГГ-ММ-ДД>.tar.gz`.
+  На роутере ничего не сохраняется, поэтому размер overlay не упирается
+  в свободную оперативную память.
+* **Восстановление** из ранее сохранённого архива. Новый слой распаковывается
+  рядом с живым, а подменяется на ранней загрузке — так, как это безопасно
+  для overlayfs.
+* **Откат**: слой, заменённый прошлым восстановлением, сохраняется.
+* Ошибки показываются на странице вместе с выводом `tar`.
 
 ## Установка
 
@@ -136,14 +138,27 @@ opkg update && opkg install luci-compat luci-lua-runtime luci-lib-nixio
 ### Что попадает в архив
 
 Архивируется `/overlay/upper` — слой с реальными изменениями. Если такой
-раскладки нет, используется `/overlay` целиком. Служебный каталог `work`
-исключается: BusyBox tar не понимает длинную опцию `--exclude=`, поэтому
-шаблоны исключения передаются файлом через `-X`.
+раскладки нет, используется `/overlay` целиком, и тогда из архива исключаются
+служебный каталог `work` и рабочий каталог плагина `.overlaybackup`.
 
-Перед архивацией разрываются жёсткие ссылки (`find -links +1`, затем
-`cp -p` + `mv`). Иначе tar сохранит их как hardlink-записи, а при
-распаковке обратно на overlayfs создание жёсткой ссылки может завершиться
-ошибкой `Operation not permitted`.
+### Почему важен GNU tar
+
+Overlayfs хранит следы удалений двумя способами. Удалённый файл отмечается
+whiteout-записью — символьным устройством `0:0`, и её сохраняет любой tar.
+А вот каталог, перекрывающий нижний слой, отмечается расширенным атрибутом
+`trusted.overlay.opaque`, и **BusyBox tar про расширенные атрибуты не знает
+вообще**. Архив при этом выглядит целым, но после восстановления удалённые
+каталоги возвращаются из образа прошивки.
+
+Поэтому плагин ищет GNU tar (`/usr/bin/tar`) и, найдя его, добавляет
+`--xattrs --xattrs-include='trusted.overlay.*' --numeric-owner`. Без GNU tar
+всё работает, но страница показывает предупреждение. Ставится он обычным
+`apk add tar`.
+
+Там же при создании архива используется `--hard-dereference`: жёсткие ссылки
+записываются обычными файлами. Прежние версии плагина добивались того же,
+разрывая ссылки прямо в живом overlay через `cp -p` + `mv` — то есть правили
+систему, которую копируют. Больше этого не происходит.
 
 ### Скачивание
 
@@ -154,33 +169,66 @@ opkg update && opkg install luci-compat luci-lua-runtime luci-lib-nixio
 версию определить не удалось, поле просто выпадает — лучше короткое имя, чем
 слово-заглушка в нём.
 
-Имя одинаково в `/tmp` и при скачивании, поэтому фиксированного пути нет: архив
-ищется по маске `/tmp/overlay-backup-*.tar.gz`, а при создании нового прежние
-удаляются, чтобы копии за разные дни не занимали оперативную память.
+Промежуточного файла нет: `tar` пишет в конвейер, а контроллер перекладывает
+его блоками по 64 КБ прямо в HTTP-ответ. Раньше архив собирался в `/tmp`, а это
+tmpfs, то есть оперативная память, — overlay на сотни мегабайт туда просто не
+помещался, и `tar` обрывался на полпути.
 
-Файл отдаётся блоками по 64 КБ и с заголовком `Content-Length`. Чтение
-архива целиком в память (`f:read("*a")`) на устройствах с небольшим объёмом
-RAM обрывало ответ, и браузер показывал **Bad Request** — именно это здесь и
-исправлено.
+Обратная сторона: заголовок `Content-Length` выставить нельзя, размер заранее
+неизвестен. Если передача прервётся, файл окажется коротким, а серверной копии
+для проверки не останется — после скачивания стоит убедиться, что архив
+открывается.
 
 ### Восстановление
 
-Загружаемый архив принимается потоково через `luci.http.setfilehandler` и
-сразу пишется на диск, а не собирается в памяти.
+Распаковывать архив прямо в смонтированный `/overlay/upper` **нельзя**. Правка
+слоёв смонтированного overlayfs ядром не поддерживается: открытые файлы уезжают
+на подменённые inode, и обращения к ним начинают падать с `Stale file handle` —
+вплоть до того, что перестаёт записываться база пакетов. Прежние версии плагина
+делали именно так.
 
-Распаковка идёт **напрямую в `/overlay/upper`**, а не в `/`. При записи в
-объединённый (merged) overlay ядро может отказывать в замене файлов,
-унаследованных из read-only слоя, с ошибкой `Operation not permitted`; запись
-в upper-слой эту union-механику обходит.
+Теперь это разнесено на два шага.
 
-После успешной распаковки роутер уходит в перезагрузку фоном с задержкой в
-3 секунды — чтобы HTTP-ответ успел дойти до браузера прежде, чем оборвётся
-соединение.
+**Шаг 1, из LuCI.** Загружаемый архив принимается потоково и пишется в
+`/overlay/.overlaybackup/upload.tar.gz` — на файловую систему overlay, а не
+в `/tmp`, по той же причине с памятью. Затем он проверяется (`tar -tzf`) и
+распаковывается в `/overlay/.overlaybackup/staging` — каталог **рядом** с
+`upper`, вне смонтированного объединения, так что живую систему это не трогает.
+Если в распакованном нет каталога `etc`, подмена отменяется: остаться без `etc`
+значит остаться без загрузки. После этого ставится флаг и устройство уходит
+в перезагрузку.
+
+**Шаг 2, на загрузке.** Скрипт `/etc/init.d/overlaybackup-restore` со
+`START=01` видит флаг и выполняет подмену двумя `mv` в пределах одной файловой
+системы: текущий слой уезжает в `previous`, подготовленный встаёт на его место.
+Если второй `mv` не удался, прежний слой возвращается обратно. Сразу после
+этого — `reboot -f`, чтобы ядро увидело новый слой с нуля; `-f` намеренно,
+потому что скрипты завершения работы читали бы файлы слоя, которого на его
+месте уже нет.
+
+Флаг снимается до подмены, так что неудача не превращается в цикл перезагрузок.
+
+Итого устройство перезагружается дважды: первый раз — чтобы применить,
+второй — чтобы подняться на восстановленной системе.
+
+### Откат
+
+`/overlay/.overlaybackup/previous` — это слой, который был заменён. Он
+удаляется при подготовке следующего восстановления, когда система уже
+загружена и слой ничем не занят. Если восстановленная система не устраивает,
+вернуться можно, поменяв каталоги обратно (из failsafe или по SSH):
+
+```sh
+mv /overlay/upper /overlay/.overlaybackup/staging
+mv /overlay/.overlaybackup/previous /overlay/upper
+sync && reboot -f
+```
 
 ## Структура репозитория
 
 ```
 runtime/                              раскладка файлов от корня ФС роутера
+  etc/init.d/overlaybackup-restore   подмена слоя на загрузке
   usr/lib/lua/luci/controller/…lua    контроллер (маршруты и логика)
   usr/lib/lua/luci/view/…htm          шаблон страницы
   usr/lib/lua/luci/i18n/…ru.lmo       собранный русский каталог
@@ -221,15 +269,15 @@ Tested on Netis NX30 v2 / GL.iNet Flint 2 running vanilla OpenWrt 25.12.5.
 
 ## Features
 
-* **Create a backup** — the entire overlay content (installed packages,
-  configuration, modified and added files) is packed into
-  `/tmp/overlay-backup-<hostname>-<OpenWrt version>-<YYYY-MM-DD>.tar.gz`.
-* **Download** the resulting archive to keep it off the device, under the very
-  same name it has in `/tmp`.
-* **Delete** the archive from `/tmp` so it stops using up RAM.
-* **Restore** from a previously saved archive, with the device
-  rebooting automatically once the archive is unpacked.
-* The `tar` output is shown on the page whenever an operation fails.
+* **Download a backup** — the entire overlay content (installed packages,
+  configuration, modified and added files) is packed and streamed straight to
+  the browser as
+  `overlay-backup-<hostname>-<OpenWrt version>-<YYYY-MM-DD>.tar.gz`. Nothing is
+  written to the router, so the size of the overlay is not limited by free RAM.
+* **Restore** from a previously saved archive. The new layer is unpacked next
+  to the live one and swapped in early during boot - the way overlayfs allows.
+* **Rollback**: the layer replaced by the last restore is kept.
+* Failures are reported on the page along with the `tar` output.
 
 ## Installation
 
@@ -343,14 +391,28 @@ when installing by copying the files.
 
 ### What goes into the archive
 
-`/overlay/upper` is archived — the layer holding the actual changes. If that
-layout is missing, the whole `/overlay` is used instead. The internal `work`
-directory is excluded: BusyBox tar does not understand the long `--exclude=`
-option, so the exclusion patterns are passed as a file via `-X`.
+`/overlay/upper` is archived - the layer holding the actual changes. If that
+layout is missing, the whole `/overlay` is used instead, and then the internal
+`work` directory and the plugin's own `.overlaybackup` are excluded.
 
-Hard links are broken before archiving (`find -links +1`, then `cp -p` + `mv`).
-Otherwise tar stores them as hardlink entries, and recreating a hard link while
-unpacking back onto overlayfs can fail with `Operation not permitted`.
+### Why GNU tar matters
+
+Overlayfs records deletions in two different ways. A deleted file is marked by
+a whiteout entry - a `0:0` character device - and any tar preserves that. A
+directory that masks the one below it, however, is marked by the extended
+attribute `trusted.overlay.opaque`, and **BusyBox tar knows nothing about
+extended attributes at all**. The archive still looks complete, but after a
+restore those deleted directories come back from the firmware image.
+
+So the plugin looks for GNU tar (`/usr/bin/tar`) and, when it finds it, adds
+`--xattrs --xattrs-include='trusted.overlay.*' --numeric-owner`. Everything
+works without GNU tar, but the page shows a warning. Install it with a plain
+`apk add tar`.
+
+Creating the archive also passes `--hard-dereference`, so hard links are stored
+as ordinary files. Earlier versions of the plugin achieved the same by breaking
+the links in the live overlay with `cp -p` + `mv` - that is, by editing the very
+system they were copying. That no longer happens.
 
 ### Downloading
 
@@ -361,33 +423,66 @@ the date. Characters unsafe for a file name are replaced by `_` in the first two
 If the version cannot be determined the field is simply left out - a shorter name
 beats a placeholder word inside it.
 
-The name is the same in `/tmp` as it is when downloaded, so there is no fixed
-path: the archive is looked up by the `/tmp/overlay-backup-*.tar.gz` pattern, and
-creating a new one removes the previous archives so that copies from different
-days do not eat up RAM.
+There is no intermediate file: `tar` writes into a pipe and the controller
+forwards it to the HTTP response in 64 KiB blocks. The archive used to be built
+in `/tmp`, which is tmpfs - RAM - so an overlay of a few hundred megabytes
+simply did not fit and `tar` was cut off halfway.
 
-The file is served in 64 KiB blocks and with a `Content-Length` header. Reading
-the whole archive into memory (`f:read("*a")`) truncated the response on devices
-with little RAM, and the browser showed **Bad Request** — that is exactly what
-is fixed here.
+The trade-off: `Content-Length` cannot be set, because the size is not known in
+advance. If the transfer breaks the file ends up short, and there is no copy on
+the server left to check it against - so do confirm the downloaded archive
+opens.
 
 ### Restoring
 
-The uploaded archive is streamed in through `luci.http.setfilehandler` and
-written to disk as it arrives instead of being buffered in memory.
+Unpacking an archive straight into the mounted `/overlay/upper` is **not
+allowed**. The kernel does not support modifying the layers of a mounted
+overlayfs: open files end up on replaced inodes and accesses to them start
+failing with `Stale file handle` - to the point where the package database can
+no longer be written. Earlier versions of the plugin did exactly that.
 
-It is unpacked **directly into `/overlay/upper`**, not into `/`. When writing
-into the merged overlay, the kernel can refuse to replace files inherited from
-the read-only layer with `Operation not permitted`; writing into the upper layer
-sidesteps that union behaviour.
+It is now split in two.
 
-Once unpacking succeeds, the router reboots in the background after a 3 second
-delay, so that the HTTP response reaches the browser before the connection drops.
+**Step 1, from LuCI.** The uploaded archive is streamed to
+`/overlay/.overlaybackup/upload.tar.gz` - onto the overlay filesystem rather
+than `/tmp`, for the same reason of memory. It is then validated (`tar -tzf`)
+and unpacked into `/overlay/.overlaybackup/staging`, a directory **next to**
+`upper` and outside the mounted union, so the live system is left alone. If the
+unpacked tree has no `etc` directory the swap is called off: a device without
+`etc` is a device that does not boot. A flag is then set and the device reboots.
+
+**Step 2, during boot.** `/etc/init.d/overlaybackup-restore` with `START=01`
+sees the flag and performs the swap with two renames within one filesystem: the
+current layer moves aside to `previous`, the prepared one takes its place. If
+the second rename fails, the old layer is put back. Immediately after comes
+`reboot -f`, so the kernel sees the new layer from scratch; `-f` is deliberate,
+because shutdown scripts would read files of a layer that is no longer where it
+was.
+
+The flag is cleared before the swap, so a failure does not turn into a reboot
+loop.
+
+All in all the device reboots twice: once to apply the restore, once to come up
+on the restored system.
+
+### Rolling back
+
+`/overlay/.overlaybackup/previous` is the layer that was replaced. It is removed
+when the next restore is prepared, by which time the system is up and the layer
+is not in use by anything. If the restored system is not what you wanted, swap
+the directories back (from failsafe or over SSH):
+
+```sh
+mv /overlay/upper /overlay/.overlaybackup/staging
+mv /overlay/.overlaybackup/previous /overlay/upper
+sync && reboot -f
+```
 
 ## Repository layout
 
 ```
 runtime/                              files laid out from the router's FS root
+  etc/init.d/overlaybackup-restore   boot-time layer swap
   usr/lib/lua/luci/controller/…lua    controller (routes and logic)
   usr/lib/lua/luci/view/…htm          page template
   usr/lib/lua/luci/i18n/…ru.lmo       compiled Russian catalog

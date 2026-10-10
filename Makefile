@@ -46,6 +46,9 @@ endef
 # The Russian catalog is committed pre-compiled (see po/README.md), so it
 # is installed as a plain file rather than built here.
 define Package/luci-app-overlaybackup/install
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./runtime/etc/init.d/overlaybackup-restore \
+		$(1)/etc/init.d/overlaybackup-restore
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/controller
 	$(INSTALL_DATA) ./runtime/usr/lib/lua/luci/controller/overlaybackup.lua \
 		$(1)/usr/lib/lua/luci/controller/overlaybackup.lua
@@ -60,6 +63,7 @@ endef
 define Package/luci-app-overlaybackup/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
+/etc/init.d/overlaybackup-restore enable 2>/dev/null
 rm -f /tmp/luci-indexcache* 2>/dev/null
 rm -rf /tmp/luci-modulecache 2>/dev/null
 exit 0
@@ -67,6 +71,8 @@ endef
 
 define Package/luci-app-overlaybackup/postrm
 #!/bin/sh
+rm -f /etc/rc.d/S*overlaybackup-restore 2>/dev/null
+rm -rf /overlay/.overlaybackup 2>/dev/null
 rm -f /tmp/luci-indexcache* 2>/dev/null
 rm -rf /tmp/luci-modulecache 2>/dev/null
 exit 0

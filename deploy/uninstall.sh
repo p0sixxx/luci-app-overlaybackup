@@ -35,6 +35,13 @@ else
 	      /usr/lib/lua/luci/i18n/overlaybackup.*.lmo
 fi
 
+# The boot hook, its symlink and the staging area on the overlay filesystem.
+if [ -x /etc/init.d/overlaybackup-restore ]; then
+	/etc/init.d/overlaybackup-restore disable 2>/dev/null || true
+fi
+rm -f /etc/rc.d/S*overlaybackup-restore 2>/dev/null || true
+rm -rf /overlay/.overlaybackup 2>/dev/null || true
+
 # Files of the earlier versions of this plugin.
 rm -f /usr/lib/lua/luci/controller/fullbackup.lua \
       /usr/lib/lua/luci/controller/fullbackuprestore.lua \
