@@ -23,7 +23,7 @@ done
 
 if [ -n "$LUA_BIN" ] && [ -f "$CONTROLLER" ]; then
 	echo "Checking the controller syntax..."
-	if ! "$LUA_BIN" -e 'assert(loadfile(arg[1]))' "$CONTROLLER" >/tmp/overlaybackup-lua-check.log 2>&1; then
+	if ! "$LUA_BIN" -e "assert(loadfile('$CONTROLLER'))" >/tmp/overlaybackup-lua-check.log 2>&1; then
 		echo "ERROR: $CONTROLLER fails to parse, not restarting uhttpd:" >&2
 		cat /tmp/overlaybackup-lua-check.log >&2
 		rm -f /tmp/overlaybackup-lua-check.log

@@ -55,7 +55,7 @@ for candidate in lua lua5.1; do
 	command -v "$candidate" >/dev/null 2>&1 && { LUA_BIN="$candidate"; break; }
 done
 if [ -n "$LUA_BIN" ]; then
-	if ! "$LUA_BIN" -e 'assert(loadfile(arg[1]))' "${RUNTIME_DIR}/usr/lib/lua/luci/controller/overlaybackup.lua" >/tmp/overlaybackup-lua-check.log 2>&1; then
+	if ! "$LUA_BIN" -e "assert(loadfile('${RUNTIME_DIR}/usr/lib/lua/luci/controller/overlaybackup.lua'))" >/tmp/overlaybackup-lua-check.log 2>&1; then
 		echo "ERROR: the controller fails to parse - aborting before touching the live install:" >&2
 		cat /tmp/overlaybackup-lua-check.log >&2
 		rm -f /tmp/overlaybackup-lua-check.log
